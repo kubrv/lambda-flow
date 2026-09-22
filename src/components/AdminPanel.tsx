@@ -1,7 +1,13 @@
-import { useMemo, useState } from "react";
-import { formatKm, optimizeOrder } from "../lib/geo";
-import { geocodeAddress } from "../lib/geocode";
-import type { AppData, DayRoute, Motoboy, Stop, Weekday } from "../lib/types";
+import { useEffect, useMemo, useState } from "react";
+import { formatKm } from "../lib/geo";
+import { optimizeRouteApi } from "../lib/optimizeApi";
+import {
+  formatPlaceLine,
+  normalizeAddress,
+  parseCoordsInput,
+  parsePlaceLine,
+} from "../lib/parseAddress";
+import type { AppData, DayRoute, Motoboy, Weekday } from "../lib/types";
 import { WEEKDAYS, createId } from "../lib/types";
 
 type Props = {
@@ -17,12 +23,34 @@ export function AdminPanel({ data, day, onChange }: Props) {
   const dayLabel = WEEKDAYS.find((d) => d.id === day)?.label ?? day;
 
   const [startAddress, setStartAddress] = useState(route.startAddress);
+  const [startCoords, setStartCoords] = useState(
+    route.startLat != null && route.startLng != null
+      ? `${route.startLat}, ${route.startLng}`
+      : "",
+  );
   const [motoboyId, setMotoboyId] = useState(route.motoboyId ?? "");
   const [bulkAddresses, setBulkAddresses] = useState(
-    route.stops.map((s) => s.address).join("\n"),
+    route.stops
+      .map((s) => formatPlaceLine(s.address, s.lat, s.lng))
+      .join("\n"),
   );
   const [newMotoboy, setNewMotoboy] = useState("");
   const [status, setStatus] = useState<Status>({ kind: "idle", text: "" });
+
+  useEffect(() => {
+    setStartAddress(route.startAddress);
+    setStartCoords(
+      route.startLat != null && route.startLng != null
+        ? `${route.startLat}, ${route.startLng}`
+        : "",
+    );
+    setMotoboyId(route.motoboyId ?? "");
+    setBulkAddresses(
+      route.stops
+        .map((s) => formatPlaceLine(s.address, s.lat, s.lng))
+        .join("\n"),
+    );
+  }, [day, route]);
 
   const previewKm = useMemo(() => formatKm(route.totalKm), [route.totalKm]);
 
@@ -63,7 +91,7 @@ export function AdminPanel({ data, day, onChange }: Props) {
   }
 
   async function optimizeAndSave() {
-    const addresses = bulkAddresses
+    const lines = bulkAddresses
       .split(/\r?\n/)
       .map((l) => l.trim())
       .filter(Boolean);
@@ -72,94 +100,77 @@ export function AdminPanel({ data, day, onChange }: Props) {
       setStatus({ kind: "err", text: "Informe o ponto de partida." });
       return;
     }
-    if (!addresses.length) {
+    if (!lines.length) {
       setStatus({ kind: "err", text: "Cole ao menos um endereço." });
       return;
     }
 
     setStatus({
       kind: "busy",
-      text: "Geocodificando e organizando a rota… isso pode levar alguns segundos.",
+      text: "Calculando rota e km reais (ruas)…",
     });
 
     try {
-      const start = await geocodeAddress(startAddress);
-      if (!start) {
-        setStatus({
-          kind: "err",
-          text: "Não encontrei o ponto de partida. Tente um endereço mais completo (rua, número, cidade).",
-        });
-        return;
-      }
+      const parsedStart = parsePlaceLine(startAddress);
+      const typedStart = parseCoordsInput(startCoords);
+      const startLat = typedStart?.lat ?? parsedStart.lat;
+      const startLng = typedStart?.lng ?? parsedStart.lng;
 
-      const stopsRaw: Stop[] = [];
-      for (let i = 0; i < addresses.length; i++) {
-        setStatus({
-          kind: "busy",
-          text: `Geocodificando endereço ${i + 1} de ${addresses.length}…`,
-        });
-        const coords = await geocodeAddress(addresses[i]);
-        stopsRaw.push({
+      const stopsInput = lines.map((line) => {
+        const parsed = parsePlaceLine(line);
+        const cached = data.coordCache[normalizeAddress(parsed.address)];
+        return {
           id: createId(),
-          address: addresses[i],
-          label: `Parada ${i + 1}`,
-          lat: coords?.lat ?? null,
-          lng: coords?.lng ?? null,
-        });
-        if (i < addresses.length - 1) {
-          await new Promise((r) => setTimeout(r, 1100));
-        }
+          address: parsed.address,
+          lat: parsed.lat ?? cached?.lat ?? null,
+          lng: parsed.lng ?? cached?.lng ?? null,
+        };
+      });
+
+      const result = await optimizeRouteApi({
+        startAddress: parsedStart.address.trim(),
+        startLat,
+        startLng,
+        stops: stopsInput,
+      });
+
+      const cache = { ...data.coordCache };
+      cache[normalizeAddress(parsedStart.address)] = result.start;
+      for (const s of result.stops) {
+        cache[normalizeAddress(s.address)] = { lat: s.lat!, lng: s.lng! };
       }
-
-      const withCoords = stopsRaw.filter(
-        (s): s is Stop & { lat: number; lng: number } =>
-          s.lat != null && s.lng != null,
-      );
-      const missing = stopsRaw.length - withCoords.length;
-
-      if (!withCoords.length) {
-        setStatus({
-          kind: "err",
-          text: "Nenhum endereço foi localizado. Revise a lista e tente novamente.",
-        });
-        return;
-      }
-
-      const { ordered, totalKm } = optimizeOrder(start, withCoords);
-      const orderedIds = new Set(ordered.map((s) => s.id));
-      const leftovers = stopsRaw.filter((s) => !orderedIds.has(s.id));
-      const finalStops = [
-        ...ordered.map((s, i) => ({ ...s, label: `Parada ${i + 1}` })),
-        ...leftovers.map((s, i) => ({
-          ...s,
-          label: `Sem coords ${i + 1}`,
-        })),
-      ];
 
       const next: DayRoute = {
         day,
-        startAddress: startAddress.trim(),
-        startLat: start.lat,
-        startLng: start.lng,
+        startAddress: parsedStart.address.trim(),
+        startLat: result.start.lat,
+        startLng: result.start.lng,
         motoboyId: motoboyId || null,
-        stops: finalStops,
-        totalKm,
+        stops: result.stops.map((s, i) => ({
+          ...s,
+          label: `Parada ${i + 1}`,
+        })),
+        totalKm: result.totalKm,
         optimizedAt: new Date().toISOString(),
       };
 
       onChange({
         ...data,
+        coordCache: cache,
         routes: { ...data.routes, [day]: next },
       });
 
-      setBulkAddresses(finalStops.map((s) => s.address).join("\n"));
+      setBulkAddresses(
+        next.stops
+          .map((s) => formatPlaceLine(s.address, s.lat, s.lng))
+          .join("\n"),
+      );
+      setStartAddress(parsedStart.address.trim());
+      setStartCoords(`${result.start.lat}, ${result.start.lng}`);
+
       setStatus({
         kind: "ok",
-        text:
-          `Rota de ${dayLabel} salva · ${formatKm(totalKm)}` +
-          (missing
-            ? ` · ${missing} endereço(s) sem coordenadas ficaram no fim.`
-            : ""),
+        text: `Rota de ${dayLabel} salva · ${formatKm(result.totalKm)} (ruas · ${result.provider})`,
       });
     } catch (err) {
       setStatus({
@@ -181,8 +192,9 @@ export function AdminPanel({ data, day, onChange }: Props) {
     <section className="panel">
       <h2>Administração · {dayLabel}</h2>
       <p className="lede">
-        Insira os endereços (um por linha). O sistema geocodifica, ordena a
-        partir do ponto de partida e calcula o total de km.
+        Insira os endereços (um por linha). O sistema ordena a rota e calcula os
+        km pelas ruas. Opcional:{" "}
+        <code>endereço @ -23.55, -46.63</code>
       </p>
 
       <div className="split">
@@ -194,6 +206,18 @@ export function AdminPanel({ data, day, onChange }: Props) {
               value={startAddress}
               onChange={(e) => setStartAddress(e.target.value)}
               placeholder="Ex: Av. Paulista, 1000, São Paulo - SP"
+            />
+          </div>
+
+          <div className="field">
+            <label htmlFor="start-coords">
+              Coordenadas do ponto de partida (opcional)
+            </label>
+            <input
+              id="start-coords"
+              value={startCoords}
+              onChange={(e) => setStartCoords(e.target.value)}
+              placeholder="-23.561414, -46.655881"
             />
           </div>
 
@@ -219,7 +243,9 @@ export function AdminPanel({ data, day, onChange }: Props) {
               id="addresses"
               value={bulkAddresses}
               onChange={(e) => setBulkAddresses(e.target.value)}
-              placeholder={"Rua A, 10, Cidade\nRua B, 20, Cidade\n..."}
+              placeholder={
+                "Rua A, 10, Cidade\nRua B, 20, Cidade @ -23.56, -46.64"
+              }
             />
           </div>
 
@@ -243,12 +269,13 @@ export function AdminPanel({ data, day, onChange }: Props) {
           </div>
 
           <p className="hint">
-            Distância atual salva: <strong>{previewKm}</strong> · links Waze /
-            Google Maps são gerados na visualização da rota.
+            Distância atual: <strong>{previewKm}</strong> · dados no Supabase
           </p>
 
           {status.text ? (
-            <div className={`status ${status.kind === "ok" ? "ok" : ""} ${status.kind === "err" ? "err" : ""}`}>
+            <div
+              className={`status ${status.kind === "ok" ? "ok" : ""} ${status.kind === "err" ? "err" : ""}`}
+            >
               {status.text}
             </div>
           ) : null}

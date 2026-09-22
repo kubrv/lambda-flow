@@ -362,6 +362,13 @@ a {
   font-size: 0.88rem;
 }
 
+.hint code,
+.lede code {
+  font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+  font-size: 0.86em;
+  color: var(--cyan);
+}
+
 .status {
   margin-top: 0.75rem;
   padding: 0.7rem 0.85rem;

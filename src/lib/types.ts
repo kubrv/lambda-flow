@@ -45,6 +45,8 @@ export type DayRoute = {
 export type AppData = {
   motoboys: Motoboy[];
   routes: Record<Weekday, DayRoute>;
+  /** Cache local de coordenadas por endereço (sem APIs externas). */
+  coordCache: Record<string, { lat: number; lng: number }>;
 };
 
 export function emptyRoute(day: Weekday): DayRoute {
