@@ -3,7 +3,6 @@ import { formatKm } from "../lib/geo";
 import { optimizeRouteApi } from "../lib/optimizeApi";
 import {
   normalizeAddress,
-  parseCoordsInput,
   parsePlaceLine,
 } from "../lib/parseAddress";
 import { upsertSavedAddress } from "../lib/storage";
@@ -29,11 +28,8 @@ export function AdminPanel({ data, day, onChange }: Props) {
   const dayLabel = WEEKDAYS.find((d) => d.id === day)?.label ?? day;
 
   const [startAddress, setStartAddress] = useState(route.startAddress);
-  const [startCoords, setStartCoords] = useState(
-    route.startLat != null && route.startLng != null
-      ? `${route.startLat}, ${route.startLng}`
-      : "",
-  );
+  const [startLat, setStartLat] = useState<number | null>(route.startLat);
+  const [startLng, setStartLng] = useState<number | null>(route.startLng);
   const [startAddressId, setStartAddressId] = useState("");
   const [motoboyId, setMotoboyId] = useState(route.motoboyId ?? "");
   const [selectedIds, setSelectedIds] = useState<string[]>(() =>
@@ -50,11 +46,8 @@ export function AdminPanel({ data, day, onChange }: Props) {
 
   useEffect(() => {
     setStartAddress(route.startAddress);
-    setStartCoords(
-      route.startLat != null && route.startLng != null
-        ? `${route.startLat}, ${route.startLng}`
-        : "",
-    );
+    setStartLat(route.startLat);
+    setStartLng(route.startLng);
     const startHit = data.addresses.find(
       (a) =>
         normalizeAddress(a.address) === normalizeAddress(route.startAddress),
@@ -80,11 +73,8 @@ export function AdminPanel({ data, day, onChange }: Props) {
     const saved = data.addresses.find((a) => a.id === id);
     if (!saved) return;
     setStartAddress(saved.address);
-    if (saved.lat != null && saved.lng != null) {
-      setStartCoords(`${saved.lat}, ${saved.lng}`);
-    } else {
-      setStartCoords("");
-    }
+    setStartLat(saved.lat);
+    setStartLng(saved.lng);
   }
 
   const previewKm = useMemo(() => formatKm(route.totalKm), [route.totalKm]);
@@ -131,9 +121,8 @@ export function AdminPanel({ data, day, onChange }: Props) {
 
     if (hist.startAddress && !startAddress.trim()) {
       setStartAddress(hist.startAddress);
-      if (hist.startLat != null && hist.startLng != null) {
-        setStartCoords(`${hist.startLat}, ${hist.startLng}`);
-      }
+      setStartLat(hist.startLat);
+      setStartLng(hist.startLng);
       addresses = upsertSavedAddress(addresses, {
         label: "Ponto de partida",
         address: hist.startAddress,
@@ -238,12 +227,17 @@ export function AdminPanel({ data, day, onChange }: Props) {
 
     try {
       const parsedStart = parsePlaceLine(startAddress);
-      const typedStart = parseCoordsInput(startCoords);
+      const catalogStart = startAddressId
+        ? data.addresses.find((a) => a.id === startAddressId)
+        : undefined;
+      const cached = data.coordCache[normalizeAddress(parsedStart.address)];
 
       const result = await optimizeRouteApi({
         startAddress: parsedStart.address.trim(),
-        startLat: typedStart?.lat ?? parsedStart.lat,
-        startLng: typedStart?.lng ?? parsedStart.lng,
+        startLat:
+          catalogStart?.lat ?? startLat ?? parsedStart.lat ?? cached?.lat ?? null,
+        startLng:
+          catalogStart?.lng ?? startLng ?? parsedStart.lng ?? cached?.lng ?? null,
         stops: selected.map((a) => ({
           id: createId(),
           addressId: a.id,
@@ -311,7 +305,8 @@ export function AdminPanel({ data, day, onChange }: Props) {
 
       setSelectedIds(stops.map((s) => s.addressId!).filter(Boolean));
       setStartAddress(parsedStart.address.trim());
-      setStartCoords(`${result.start.lat}, ${result.start.lng}`);
+      setStartLat(result.start.lat);
+      setStartLng(result.start.lng);
 
       setStatus({
         kind: "ok",
@@ -378,18 +373,10 @@ export function AdminPanel({ data, day, onChange }: Props) {
                     normalizeAddress(e.target.value),
                 );
                 setStartAddressId(hit?.id ?? "");
+                setStartLat(hit?.lat ?? null);
+                setStartLng(hit?.lng ?? null);
               }}
               placeholder="Ex: R. União, 510 - Poá - SP"
-            />
-          </div>
-
-          <div className="field">
-            <label htmlFor="start-coords">Coordenadas (opcional)</label>
-            <input
-              id="start-coords"
-              value={startCoords}
-              onChange={(e) => setStartCoords(e.target.value)}
-              placeholder="-23.5104581, -46.350281"
             />
           </div>
 
