@@ -6,7 +6,8 @@ Rotas diárias para motoboys — **Vercel** + **Supabase**, com km calculados pe
 
 - Frontend: Vite + React (hospedado na Vercel)
 - Banco: Supabase (`motoboys`, `day_routes`, `coord_cache`)
-- Km / ordem: OSRM (rota de carro) + opcional Google Directions (`GOOGLE_MAPS_API_KEY`)
+- Km / ordem: OSRM (rotas de carro) + OpenStreetMap/Nominatim (geocoding)
+- Sem API key do Google
 
 ## Setup Supabase
 
@@ -30,7 +31,6 @@ No painel da Vercel, adicione:
 |----------|------|
 | `VITE_SUPABASE_URL` | Production / Preview |
 | `VITE_SUPABASE_ANON_KEY` | Production / Preview |
-| `GOOGLE_MAPS_API_KEY` | Production (opcional) |
 
 Redeploy depois de salvar as envs.
 

@@ -2,16 +2,26 @@ import { getSupabase, isSupabaseConfigured } from "./supabase";
 import type {
   AppData,
   DayRoute,
-  Motoboy,
+  FinanceEntry,
   SavedAddress,
   Stop,
   Weekday,
 } from "./types";
-import { WEEKDAYS, createId, emptyRoute } from "./types";
+import {
+  WEEKDAYS,
+  createId,
+  emptyRoute,
+  DEFAULT_PRICE_PER_KM,
+  FALLBACK_START_ADDRESS,
+  resolveStopKinds,
+  normalizeBoxes,
+} from "./types";
 import { normalizeAddress } from "./parseAddress";
 import { cleanNickname, isAutoStopLabel } from "./labels";
+import { localDateKey, weekdayFromDateKey } from "./dates";
+import { cloneDefaultHours, normalizeHoursPeriods } from "./hours";
 
-type DayRouteRow = {
+type LegacyDayRouteRow = {
   day: Weekday;
   start_address: string;
   start_lat: number | null;
@@ -19,6 +29,19 @@ type DayRouteRow = {
   motoboy_id: string | null;
   stops: Stop[] | null;
   total_km: number | null;
+  return_to_start?: boolean | null;
+  optimized_at: string | null;
+};
+
+type DateRouteRow = {
+  route_date: string;
+  start_address: string;
+  start_lat: number | null;
+  start_lng: number | null;
+  motoboy_id: string | null;
+  stops: Stop[] | null;
+  total_km: number | null;
+  return_to_start?: boolean | null;
   optimized_at: string | null;
 };
 
@@ -32,51 +55,122 @@ type AddressRow = {
   id: string;
   label: string | null;
   address: string;
+  complement?: string | null;
+  hours?: unknown;
   lat: number | null;
   lng: number | null;
 };
+
+type SettingsRow = {
+  id: number;
+  price_per_km: number | null;
+  preset_start_address?: string | null;
+  preset_start_lat?: number | null;
+  preset_start_lng?: number | null;
+};
+
+type FinanceRow = {
+  id: string;
+  motoboy_id: string;
+  amount: number;
+  route_dates: string[] | null;
+  description: string | null;
+  status: string;
+  created_at: string;
+  source?: string | null;
+  km?: number | null;
+};
+
+function mapStops(stops: Stop[] | null | undefined): Stop[] {
+  if (!Array.isArray(stops)) return [];
+  return stops.map((s) => {
+    const kinds = resolveStopKinds(s);
+    return {
+      ...s,
+      kinds,
+      kind: kinds.length === 1 ? kinds[0] : undefined,
+      notes: s.notes || undefined,
+      boxes: normalizeBoxes(s.boxes),
+      complement: s.complement?.trim() || undefined,
+      hours: s.hours?.length
+        ? normalizeHoursPeriods(s.hours)
+        : undefined,
+    };
+  });
+}
+
+function mapDateRoute(row: DateRouteRow): DayRoute {
+  const date = String(row.route_date).slice(0, 10);
+  return {
+    date,
+    startAddress: row.start_address || "",
+    startLat: row.start_lat,
+    startLng: row.start_lng,
+    motoboyId: row.motoboy_id,
+    stops: mapStops(row.stops),
+    totalKm: Number(row.total_km || 0),
+    returnToStart: Boolean(row.return_to_start),
+    optimizedAt: row.optimized_at,
+  };
+}
 
 function blankData(): AppData {
   return {
     motoboys: [],
     addresses: [],
-    routes: Object.fromEntries(
-      WEEKDAYS.map((d) => [d.id, emptyRoute(d.id)]),
-    ) as Record<Weekday, DayRoute>,
+    routesByDate: {},
+    weekdayLegacy: {},
+    presetStartAddress: FALLBACK_START_ADDRESS,
+    presetStartLat: null,
+    presetStartLng: null,
+    pricePerKm: DEFAULT_PRICE_PER_KM,
+    finance: [],
     coordCache: {},
   };
 }
 
-/** Garante que paradas históricas entrem no catálogo. */
 export function syncCatalogFromRoutes(data: AppData): AppData {
   const byKey = new Map(
     data.addresses.map((a) => [normalizeAddress(a.address), a]),
   );
 
-  for (const day of WEEKDAYS) {
-    for (const stop of data.routes[day.id].stops) {
-      const key = normalizeAddress(stop.address);
-      if (!key) continue;
-      const existing = byKey.get(key);
-      if (existing) {
-        if (stop.lat != null && stop.lng != null) {
-          existing.lat = stop.lat;
-          existing.lng = stop.lng;
-        }
-        if (isAutoStopLabel(existing.label) && stop.label) {
-          existing.label = cleanNickname(stop.label, stop.address);
-        }
-        continue;
+  const allStops = [
+    ...Object.values(data.routesByDate).flatMap((r) => r.stops),
+    ...Object.values(data.weekdayLegacy).flatMap((r) => r?.stops || []),
+  ];
+
+  for (const stop of allStops) {
+    const key = normalizeAddress(stop.address);
+    if (!key) continue;
+    const existing = byKey.get(key);
+    if (existing) {
+      if (stop.lat != null && stop.lng != null) {
+        existing.lat = stop.lat;
+        existing.lng = stop.lng;
       }
-      const saved: SavedAddress = {
-        id: stop.addressId || createId(),
-        label: cleanNickname(stop.label, stop.address),
-        address: stop.address,
-        lat: stop.lat,
-        lng: stop.lng,
-      };
-      byKey.set(key, saved);
+      if (isAutoStopLabel(existing.label) && stop.label) {
+        existing.label = cleanNickname(stop.label, stop.address);
+      }
+      if (stop.complement?.trim() && !existing.complement?.trim()) {
+        existing.complement = stop.complement.trim();
+      }
+      if (stop.hours?.length && !existing.hours?.length) {
+        existing.hours = normalizeHoursPeriods(stop.hours);
+      }
+      continue;
     }
+    const saved: SavedAddress = {
+      id: stop.addressId || createId(),
+      label: cleanNickname(stop.label, stop.address),
+      address: stop.address,
+      complement: stop.complement?.trim() || "",
+      hours: stop.hours?.length
+        ? normalizeHoursPeriods(stop.hours)
+        : cloneDefaultHours(),
+      lat: stop.lat,
+      lng: stop.lng,
+    };
+    byKey.set(key, saved);
   }
 
   return { ...data, addresses: [...byKey.values()] };
@@ -88,23 +182,35 @@ export function upsertSavedAddress(
     id?: string;
     label?: string;
     address: string;
+    complement?: string;
+    hours?: SavedAddress["hours"];
     lat?: number | null;
     lng?: number | null;
   },
 ): SavedAddress[] {
   const key = normalizeAddress(input.address);
   const idx = addresses.findIndex(
-    (a) => normalizeAddress(a.address) === key || (input.id && a.id === input.id),
+    (a) =>
+      normalizeAddress(a.address) === key || (input.id && a.id === input.id),
   );
   const incoming = cleanNickname(input.label, input.address);
   const prev = addresses[idx];
   const next: SavedAddress = {
     id: input.id || prev?.id || createId(),
-    label:
-      !isAutoStopLabel(incoming)
-        ? incoming
-        : cleanNickname(prev?.label, input.address),
+    label: !isAutoStopLabel(incoming)
+      ? incoming
+      : cleanNickname(prev?.label, input.address),
     address: input.address.trim(),
+    complement:
+      input.complement !== undefined
+        ? input.complement.trim()
+        : prev?.complement || "",
+    hours:
+      input.hours !== undefined
+        ? normalizeHoursPeriods(input.hours)
+        : prev?.hours?.length
+          ? normalizeHoursPeriods(prev.hours)
+          : cloneDefaultHours(),
     lat: input.lat ?? prev?.lat ?? null,
     lng: input.lng ?? prev?.lng ?? null,
   };
@@ -116,6 +222,31 @@ export function upsertSavedAddress(
   return [...addresses, next];
 }
 
+/** Seed da semana atual a partir dos templates antigos (só se não houver date_routes). */
+function seedWeekFromLegacy(
+  data: AppData,
+  legacy: Partial<Record<Weekday, DayRoute>>,
+): AppData {
+  if (Object.keys(data.routesByDate).length > 0) return data;
+  const today = new Date();
+  const routesByDate = { ...data.routesByDate };
+
+  for (let offset = -6; offset <= 7; offset++) {
+    const d = new Date(today);
+    d.setDate(today.getDate() + offset);
+    const key = localDateKey(d);
+    const wd = weekdayFromDateKey(key);
+    const src = legacy[wd];
+    if (!src?.stops.length && !src?.startAddress) continue;
+    routesByDate[key] = {
+      ...src,
+      date: key,
+    };
+  }
+
+  return { ...data, routesByDate };
+}
+
 export async function loadData(): Promise<AppData> {
   if (!isSupabaseConfigured()) {
     throw new Error(
@@ -124,48 +255,149 @@ export async function loadData(): Promise<AppData> {
   }
 
   const sb = getSupabase();
-  const [motoboysRes, routesRes, cacheRes, addressesRes] = await Promise.all([
-    sb.from("motoboys").select("id,name,phone").order("created_at"),
+  const [
+    motoboysRes,
+    legacyRes,
+    dateRoutesRes,
+    cacheRes,
+    addressesRes,
+    settingsRes,
+    financeRes,
+  ] = await Promise.all([
+    sb.from("motoboys").select("*").order("created_at"),
     sb.from("day_routes").select("*"),
+    sb.from("date_routes").select("*"),
     sb.from("coord_cache").select("address_key,lat,lng"),
-    sb.from("addresses").select("id,label,address,lat,lng").order("created_at"),
+    sb.from("addresses").select("*").order("created_at"),
+    sb.from("app_settings").select("*").eq("id", 1).maybeSingle(),
+    sb.from("finance_entries").select("*").order("created_at"),
   ]);
 
   if (motoboysRes.error) throw new Error(motoboysRes.error.message);
-  if (routesRes.error) throw new Error(routesRes.error.message);
+  if (legacyRes.error) throw new Error(legacyRes.error.message);
   if (cacheRes.error) throw new Error(cacheRes.error.message);
 
   const data = blankData();
-  data.motoboys = (motoboysRes.data || []) as Motoboy[];
+  data.motoboys = ((motoboysRes.data || []) as {
+    id: string;
+    name: string;
+    phone?: string | null;
+    company?: string | null;
+    price_per_km?: number | null;
+  }[]).map((row) => ({
+    id: row.id,
+    name: row.name,
+    phone: row.phone?.trim() || undefined,
+    company: row.company?.trim() || undefined,
+    pricePerKm:
+      row.price_per_km != null && Number(row.price_per_km) > 0
+        ? Number(row.price_per_km)
+        : undefined,
+  }));
+
+  if (!settingsRes.error && settingsRes.data) {
+    const row = settingsRes.data as SettingsRow;
+    if (row.price_per_km != null && Number(row.price_per_km) > 0) {
+      data.pricePerKm = Number(row.price_per_km);
+    }
+    if (row.preset_start_address?.trim()) {
+      data.presetStartAddress = row.preset_start_address.trim();
+      data.presetStartLat = row.preset_start_lat ?? null;
+      data.presetStartLng = row.preset_start_lng ?? null;
+    }
+  }
 
   if (!addressesRes.error && addressesRes.data) {
     data.addresses = (addressesRes.data as AddressRow[]).map((row) => ({
       id: row.id,
       label: row.label || row.address.split(",")[0].trim(),
       address: row.address,
+      complement: row.complement?.trim() || "",
+      hours: normalizeHoursPeriods(row.hours),
       lat: row.lat,
       lng: row.lng,
     }));
+  } else if (addressesRes.error) {
+    // Fallback se select * falhar por outro motivo / tabela antiga
+    const legacyAddr = await sb
+      .from("addresses")
+      .select("id,label,address,lat,lng")
+      .order("created_at");
+    if (!legacyAddr.error && legacyAddr.data) {
+      data.addresses = (legacyAddr.data as AddressRow[]).map((row) => ({
+        id: row.id,
+        label: row.label || row.address.split(",")[0].trim(),
+        address: row.address,
+        complement: "",
+        hours: cloneDefaultHours(),
+        lat: row.lat,
+        lng: row.lng,
+      }));
+    }
   }
 
-  for (const row of (routesRes.data || []) as DayRouteRow[]) {
-    data.routes[row.day] = {
-      day: row.day,
+  const legacy: Partial<Record<Weekday, DayRoute>> = {};
+  for (const row of (legacyRes.data || []) as LegacyDayRouteRow[]) {
+    legacy[row.day] = {
+      date: row.day,
       startAddress: row.start_address || "",
       startLat: row.start_lat,
       startLng: row.start_lng,
       motoboyId: row.motoboy_id,
-      stops: Array.isArray(row.stops) ? row.stops : [],
+      stops: mapStops(row.stops),
       totalKm: Number(row.total_km || 0),
+      returnToStart: Boolean(row.return_to_start),
       optimizedAt: row.optimized_at,
     };
   }
+  data.weekdayLegacy = legacy;
 
-  for (const row of (cacheRes.data || []) as CoordRow[]) {
-    data.coordCache[row.address_key] = { lat: row.lat, lng: row.lng };
+  if (!data.presetStartAddress?.trim() || data.presetStartAddress === FALLBACK_START_ADDRESS) {
+    const sun = legacy.dom;
+    if (sun?.startAddress?.trim()) {
+      data.presetStartAddress = sun.startAddress.trim();
+      data.presetStartLat = sun.startLat;
+      data.presetStartLng = sun.startLng;
+    }
   }
 
-  return syncCatalogFromRoutes(data);
+  if (!dateRoutesRes.error && dateRoutesRes.data) {
+    for (const row of dateRoutesRes.data as DateRouteRow[]) {
+      const mapped = mapDateRoute(row);
+      data.routesByDate[mapped.date] = mapped;
+    }
+  } else if (dateRoutesRes.error) {
+    console.warn("date_routes:", dateRoutesRes.error.message);
+  }
+
+  const seeded = seedWeekFromLegacy(data, legacy);
+
+  if (!financeRes.error && financeRes.data) {
+    seeded.finance = (financeRes.data as FinanceRow[]).map((row) => {
+      const desc = row.description || undefined;
+      const source: FinanceEntry["source"] =
+        row.source === "auto-route" || /^rota automática/i.test(desc || "")
+          ? "auto-route"
+          : "manual";
+      return {
+        id: row.id,
+        motoboyId: row.motoboy_id,
+        amount: Number(row.amount || 0),
+        routeDates: Array.isArray(row.route_dates) ? row.route_dates : [],
+        description: desc,
+        status: row.status === "paid" ? ("paid" as const) : ("open" as const),
+        createdAt: row.created_at,
+        source,
+        km: row.km != null ? Number(row.km) : undefined,
+      };
+    });
+  }
+
+  for (const row of (cacheRes.data || []) as CoordRow[]) {
+    seeded.coordCache[row.address_key] = { lat: row.lat, lng: row.lng };
+  }
+
+  return syncCatalogFromRoutes(seeded);
 }
 
 export async function saveData(data: AppData): Promise<void> {
@@ -189,14 +421,32 @@ export async function saveData(data: AppData): Promise<void> {
         id: m.id,
         name: m.name,
         phone: m.phone ?? null,
+        company: m.company?.trim() || null,
+        price_per_km:
+          m.pricePerKm != null && m.pricePerKm > 0 ? m.pricePerKm : null,
       })),
     );
-    if (up.error) throw new Error(up.error.message);
+    if (up.error) {
+      if (/company|price_per_km|column/i.test(up.error.message)) {
+        const fallback = await sb.from("motoboys").upsert(
+          synced.motoboys.map((m) => ({
+            id: m.id,
+            name: m.name,
+            phone: m.phone ?? null,
+          })),
+        );
+        if (fallback.error) throw new Error(fallback.error.message);
+        console.warn(
+          "Rode supabase/migration_motoboy_profile.sql para salvar empresa/valor km.",
+        );
+      } else {
+        throw new Error(up.error.message);
+      }
+    }
   }
 
   const addrExisting = await sb.from("addresses").select("id");
   if (addrExisting.error) {
-    // Tabela ainda não migrada: catálogo vive nas rotas até rodar migration_addresses.sql
     console.warn("addresses table unavailable:", addrExisting.error.message);
   } else {
     const existingAddr = new Set(
@@ -213,16 +463,90 @@ export async function saveData(data: AppData): Promise<void> {
           id: a.id,
           label: a.label,
           address: a.address,
+          complement: a.complement?.trim() || "",
+          hours: normalizeHoursPeriods(a.hours),
           lat: a.lat,
           lng: a.lng,
         })),
       );
-      if (addrUp.error) throw new Error(addrUp.error.message);
+      if (addrUp.error) {
+        // Colunas novas ainda não migradas: salva o básico
+        if (/complement|hours|column/i.test(addrUp.error.message)) {
+          const fallback = await sb.from("addresses").upsert(
+            synced.addresses.map((a) => ({
+              id: a.id,
+              label: a.label,
+              address: a.address,
+              lat: a.lat,
+              lng: a.lng,
+            })),
+          );
+          if (fallback.error) throw new Error(fallback.error.message);
+          console.warn(
+            "Rode supabase/migration_address_complement_hours.sql para salvar complemento/horário.",
+          );
+        } else {
+          throw new Error(addrUp.error.message);
+        }
+      }
     }
   }
 
-  const routeRows = WEEKDAYS.map((d) => {
-    const r = synced.routes[d.id];
+  const dateRows = Object.values(synced.routesByDate).map((r) => ({
+    route_date: r.date,
+    start_address: r.startAddress,
+    start_lat: r.startLat,
+    start_lng: r.startLng,
+    motoboy_id: r.motoboyId,
+    stops: r.stops,
+    total_km: r.totalKm,
+    return_to_start: r.returnToStart,
+    optimized_at: r.optimizedAt,
+  }));
+
+  const nextDateKeys = new Set(Object.keys(synced.routesByDate));
+  const existingDatesRes = await sb.from("date_routes").select("route_date");
+  if (!existingDatesRes.error) {
+    const toDeleteDates = (existingDatesRes.data || [])
+      .map((row) => String(row.route_date).slice(0, 10))
+      .filter((key) => key && !nextDateKeys.has(key));
+    if (toDeleteDates.length) {
+      const delDates = await sb
+        .from("date_routes")
+        .delete()
+        .in("route_date", toDeleteDates);
+      if (delDates.error) throw new Error(delDates.error.message);
+    }
+  } else if (!/does not exist|relation/i.test(existingDatesRes.error.message)) {
+    console.warn("date_routes list:", existingDatesRes.error.message);
+  }
+
+  if (dateRows.length) {
+    let dateUp = await sb.from("date_routes").upsert(dateRows);
+    if (dateUp.error && /does not exist|relation|return_to_start/i.test(dateUp.error.message)) {
+      if (/return_to_start/i.test(dateUp.error.message)) {
+        dateUp = await sb.from("date_routes").upsert(
+          dateRows.map(({ return_to_start: _, ...rest }) => rest),
+        );
+      }
+    }
+    if (dateUp.error && !/does not exist|relation/i.test(dateUp.error.message)) {
+      throw new Error(dateUp.error.message);
+    }
+    if (dateUp.error) {
+      console.warn("date_routes save:", dateUp.error.message);
+    }
+  }
+
+  // Templates semanais = espelho das rotas por data (sem manter lixo de dias limpos)
+  const byWeekday: Partial<Record<Weekday, DayRoute>> = {};
+  for (const r of Object.values(synced.routesByDate)) {
+    const wd = weekdayFromDateKey(r.date);
+    const prev = byWeekday[wd];
+    if (!prev || r.date >= (prev.date || "")) byWeekday[wd] = r;
+  }
+  const legacyRows = WEEKDAYS.map((d) => {
+    const r = byWeekday[d.id] || emptyRoute(d.id);
     return {
       day: d.id,
       start_address: r.startAddress,
@@ -231,12 +555,70 @@ export async function saveData(data: AppData): Promise<void> {
       motoboy_id: r.motoboyId,
       stops: r.stops,
       total_km: r.totalKm,
+      return_to_start: r.returnToStart,
       optimized_at: r.optimizedAt,
     };
   });
+  let legacyUp = await sb.from("day_routes").upsert(legacyRows);
+  if (legacyUp.error && /return_to_start/i.test(legacyUp.error.message)) {
+    legacyUp = await sb.from("day_routes").upsert(
+      legacyRows.map(({ return_to_start: _, ...rest }) => rest),
+    );
+  }
+  if (legacyUp.error) throw new Error(legacyUp.error.message);
 
-  const routesUp = await sb.from("day_routes").upsert(routeRows);
-  if (routesUp.error) throw new Error(routesUp.error.message);
+  const settingsPayload = {
+    id: 1,
+    price_per_km: synced.pricePerKm,
+    preset_start_address: synced.presetStartAddress,
+    preset_start_lat: synced.presetStartLat,
+    preset_start_lng: synced.presetStartLng,
+  };
+  let settingsUp = await sb.from("app_settings").upsert(settingsPayload);
+  if (settingsUp.error && /preset_start/i.test(settingsUp.error.message)) {
+    settingsUp = await sb.from("app_settings").upsert({
+      id: 1,
+      price_per_km: synced.pricePerKm,
+    });
+  }
+  if (
+    settingsUp.error &&
+    !/does not exist|relation/i.test(settingsUp.error.message)
+  ) {
+    console.warn("app_settings save:", settingsUp.error.message);
+  }
+
+  const finExisting = await sb.from("finance_entries").select("id");
+  if (!finExisting.error) {
+    const existingFin = new Set(
+      (finExisting.data || []).map((f) => f.id as string),
+    );
+    const nextFin = new Set(synced.finance.map((f) => f.id));
+    const delFin = [...existingFin].filter((id) => !nextFin.has(id));
+    if (delFin.length) {
+      await sb.from("finance_entries").delete().in("id", delFin);
+    }
+    if (synced.finance.length) {
+      const rows = synced.finance.map((f) => ({
+        id: f.id,
+        motoboy_id: f.motoboyId,
+        amount: f.amount,
+        route_dates: f.routeDates,
+        description: f.description ?? null,
+        status: f.status,
+        created_at: f.createdAt,
+        source: f.source ?? "manual",
+        km: f.km ?? null,
+      }));
+      let finUp = await sb.from("finance_entries").upsert(rows);
+      if (finUp.error && /source|column|km/i.test(finUp.error.message)) {
+        finUp = await sb.from("finance_entries").upsert(
+          rows.map(({ source: _s, km: _k, ...rest }) => rest),
+        );
+      }
+      if (finUp.error) throw new Error(finUp.error.message);
+    }
+  }
 
   const cacheRows = Object.entries(synced.coordCache).map(([address_key, v]) => ({
     address_key,
@@ -254,3 +636,5 @@ export async function saveData(data: AppData): Promise<void> {
 export async function checkLocalApi(): Promise<boolean> {
   return isSupabaseConfigured();
 }
+
+export type { FinanceEntry };

@@ -6,6 +6,12 @@ type StopIn = {
   addressId?: string | null;
   address: string;
   label?: string;
+  kind?: string;
+  kinds?: string[];
+  notes?: string;
+  boxes?: number;
+  complement?: string;
+  hours?: { open: string; close: string }[];
   lat?: number | null;
   lng?: number | null;
 };
@@ -14,69 +20,18 @@ type Body = {
   startAddress: string;
   startLat?: number | null;
   startLng?: number | null;
+  returnToStart?: boolean;
   stops: StopIn[];
 };
+
+const UA = "lambda-flow/1.1 (motoboy route planner; contact: vercel.app)";
 
 function bad(res: VercelResponse, status: number, error: string) {
   return res.status(status).json({ ok: false, error });
 }
 
-async function geocodeNominatim(address: string): Promise<LatLng | null> {
-  const url = new URL("https://nominatim.openstreetmap.org/search");
-  url.searchParams.set("q", address);
-  url.searchParams.set("format", "json");
-  url.searchParams.set("limit", "1");
-  url.searchParams.set("countrycodes", "br");
-
-  const res = await fetch(url.toString(), {
-    headers: {
-      Accept: "application/json",
-      "User-Agent": "lambda-flow/1.0 (route planner)",
-    },
-  });
-  if (!res.ok) return null;
-  const data = (await res.json()) as { lat: string; lon: string }[];
-  if (!data.length) return null;
-  return { lat: Number(data[0].lat), lng: Number(data[0].lon) };
-}
-
-async function geocodeGoogle(
-  address: string,
-  key: string,
-): Promise<LatLng | null> {
-  const url = new URL("https://maps.googleapis.com/maps/api/geocode/json");
-  url.searchParams.set("address", address);
-  url.searchParams.set("key", key);
-  url.searchParams.set("region", "br");
-  const res = await fetch(url.toString());
-  if (!res.ok) return null;
-  const data = (await res.json()) as {
-    status: string;
-    results: { geometry: { location: { lat: number; lng: number } } }[];
-  };
-  if (data.status !== "OK" || !data.results[0]) return null;
-  return data.results[0].geometry.location;
-}
-
-async function resolvePoint(
-  address: string,
-  lat: number | null | undefined,
-  lng: number | null | undefined,
-  googleKey?: string,
-): Promise<LatLng | null> {
-  if (
-    lat != null &&
-    lng != null &&
-    Number.isFinite(lat) &&
-    Number.isFinite(lng)
-  ) {
-    return { lat, lng };
-  }
-  if (googleKey) {
-    const g = await geocodeGoogle(address, googleKey);
-    if (g) return g;
-  }
-  return geocodeNominatim(address);
+function sleep(ms: number) {
+  return new Promise((r) => setTimeout(r, ms));
 }
 
 function haversineKm(a: LatLng, b: LatLng): number {
@@ -91,16 +46,58 @@ function haversineKm(a: LatLng, b: LatLng): number {
   return 2 * 6371 * Math.asin(Math.sqrt(h));
 }
 
-function pathCost(order: number[], dist: number[][], startIdx: number): number {
-  if (!order.length) return 0;
-  let total = dist[startIdx][order[0]];
-  for (let i = 1; i < order.length; i++) {
-    total += dist[order[i - 1]][order[i]];
+/** Nominatim (OpenStreetMap) — Brasil, com tentativas extras. */
+async function geocodeNominatim(address: string): Promise<LatLng | null> {
+  const queries = [
+    address,
+    /brasil|brazil|\bbr\b/i.test(address) ? address : `${address}, Brasil`,
+    /são paulo|sao paulo|\bsp\b/i.test(address)
+      ? address
+      : `${address}, São Paulo, Brasil`,
+  ];
+  const unique = [...new Set(queries.map((q) => q.trim()).filter(Boolean))];
+
+  for (let i = 0; i < unique.length; i++) {
+    if (i > 0) await sleep(1100);
+    const url = new URL("https://nominatim.openstreetmap.org/search");
+    url.searchParams.set("q", unique[i]);
+    url.searchParams.set("format", "json");
+    url.searchParams.set("limit", "1");
+    url.searchParams.set("countrycodes", "br");
+    url.searchParams.set("addressdetails", "0");
+
+    const res = await fetch(url.toString(), {
+      headers: { Accept: "application/json", "User-Agent": UA },
+    });
+    if (!res.ok) continue;
+    const data = (await res.json()) as { lat: string; lon: string }[];
+    if (!data.length) continue;
+    return { lat: Number(data[0].lat), lng: Number(data[0].lon) };
   }
-  return total;
+  return null;
 }
 
-function optimizeOrderIndices(dist: number[][], startIdx: number, n: number): number[] {
+async function resolvePoint(
+  address: string,
+  lat: number | null | undefined,
+  lng: number | null | undefined,
+): Promise<LatLng | null> {
+  if (
+    lat != null &&
+    lng != null &&
+    Number.isFinite(lat) &&
+    Number.isFinite(lng)
+  ) {
+    return { lat, lng };
+  }
+  return geocodeNominatim(address);
+}
+
+function optimizeOrderIndices(
+  dist: number[][],
+  startIdx: number,
+  n: number,
+): number[] {
   const remaining = Array.from({ length: n }, (_, i) => i).filter(
     (i) => i !== startIdx,
   );
@@ -116,168 +113,71 @@ function optimizeOrderIndices(dist: number[][], startIdx: number, n: number): nu
         best = i;
       }
     }
-    const next = remaining.splice(best, 1)[0];
-    ordered.push(next);
-    current = next;
-  }
-
-  let improved = true;
-  while (improved) {
-    improved = false;
-    for (let i = 0; i < ordered.length - 1; i++) {
-      for (let k = i + 1; k < ordered.length; k++) {
-        const candidate = [
-          ...ordered.slice(0, i),
-          ...ordered.slice(i, k + 1).reverse(),
-          ...ordered.slice(k + 1),
-        ];
-        if (
-          pathCost(candidate, dist, startIdx) + 1e-9 <
-          pathCost(ordered, dist, startIdx)
-        ) {
-          ordered.splice(0, ordered.length, ...candidate);
-          improved = true;
-        }
-      }
-    }
+    current = remaining.splice(best, 1)[0];
+    ordered.push(current);
   }
   return ordered;
 }
 
-async function googleDistanceMatrix(
-  points: LatLng[],
-  key: string,
-): Promise<number[][]> {
-  const n = points.length;
-  const dist = Array.from({ length: n }, () => Array(n).fill(0));
-  const chunk = 10;
-
-  for (let oi = 0; oi < n; oi += chunk) {
-    for (let di = 0; di < n; di += chunk) {
-      const origins = points.slice(oi, oi + chunk);
-      const destinations = points.slice(di, di + chunk);
-      const url = new URL(
-        "https://maps.googleapis.com/maps/api/distancematrix/json",
-      );
-      url.searchParams.set(
-        "origins",
-        origins.map((p) => `${p.lat},${p.lng}`).join("|"),
-      );
-      url.searchParams.set(
-        "destinations",
-        destinations.map((p) => `${p.lat},${p.lng}`).join("|"),
-      );
-      url.searchParams.set("mode", "driving");
-      url.searchParams.set("language", "pt-BR");
-      url.searchParams.set("region", "br");
-      url.searchParams.set("key", key);
-
-      const res = await fetch(url.toString());
-      if (!res.ok) throw new Error(`Distance Matrix HTTP ${res.status}`);
-      const data = (await res.json()) as {
-        status: string;
-        error_message?: string;
-        rows: {
-          elements: {
-            status: string;
-            distance?: { value: number };
-          }[];
-        }[];
-      };
-      if (data.status !== "OK") {
-        throw new Error(data.error_message || `Distance Matrix: ${data.status}`);
-      }
-
-      for (let r = 0; r < origins.length; r++) {
-        for (let c = 0; c < destinations.length; c++) {
-          const el = data.rows[r]?.elements[c];
-          const meters =
-            el?.status === "OK" && el.distance
-              ? el.distance.value
-              : haversineKm(origins[r], destinations[c]) * 1000;
-          dist[oi + r][di + c] = meters / 1000;
-        }
-      }
-    }
-  }
-  return dist;
-}
-
-async function googleRoadKm(
-  start: LatLng,
-  ordered: LatLng[],
-  key: string,
-): Promise<number> {
-  if (!ordered.length) return 0;
-
-  const destination = ordered[ordered.length - 1];
-  const middle = ordered.slice(0, -1);
-  const url = new URL("https://maps.googleapis.com/maps/api/directions/json");
-  url.searchParams.set("origin", `${start.lat},${start.lng}`);
-  url.searchParams.set("destination", `${destination.lat},${destination.lng}`);
-  url.searchParams.set("mode", "driving");
-  url.searchParams.set("language", "pt-BR");
-  url.searchParams.set("region", "br");
-  url.searchParams.set("key", key);
-  if (middle.length) {
-    url.searchParams.set(
-      "waypoints",
-      middle.map((s) => `${s.lat},${s.lng}`).join("|"),
-    );
-  }
-
-  const res = await fetch(url.toString());
-  if (!res.ok) throw new Error(`Google Directions HTTP ${res.status}`);
+async function osrmTableKm(points: LatLng[]): Promise<number[][]> {
+  const coords = points.map((p) => `${p.lng},${p.lat}`).join(";");
+  const url = `https://router.project-osrm.org/table/v1/driving/${coords}?annotations=distance`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`OSRM table HTTP ${res.status}`);
   const data = (await res.json()) as {
-    status: string;
-    error_message?: string;
-    routes: { legs: { distance: { value: number } }[] }[];
+    code: string;
+    message?: string;
+    distances?: (number | null)[][];
   };
-  if (data.status !== "OK" || !data.routes[0]) {
-    throw new Error(data.error_message || `Google Directions: ${data.status}`);
+  if (data.code !== "Ok" || !data.distances) {
+    throw new Error(data.message || `OSRM table: ${data.code}`);
   }
-  const meters = data.routes[0].legs.reduce(
-    (sum, leg) => sum + (leg.distance?.value || 0),
-    0,
+  return data.distances.map((row, i) =>
+    row.map((meters, j) => {
+      if (meters == null || !Number.isFinite(meters)) {
+        return haversineKm(points[i], points[j]);
+      }
+      return meters / 1000;
+    }),
   );
-  return Math.round((meters / 1000) * 10) / 10;
 }
 
-/** Google: matriz de distâncias + otimização + Directions para km final. */
-async function optimizeGoogle(
+async function osrmRouteKm(points: LatLng[]): Promise<number> {
+  if (points.length < 2) return 0;
+  const coords = points.map((p) => `${p.lng},${p.lat}`).join(";");
+  const url = `https://router.project-osrm.org/route/v1/driving/${coords}?overview=false&steps=false`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`OSRM route HTTP ${res.status}`);
+  const data = (await res.json()) as {
+    code: string;
+    message?: string;
+    routes?: { distance: number }[];
+  };
+  if (data.code !== "Ok" || !data.routes?.[0]) {
+    throw new Error(data.message || `OSRM route: ${data.code}`);
+  }
+  return Math.round((data.routes[0].distance / 1000) * 10) / 10;
+}
+
+async function optimizeOsrmTrip(
   start: LatLng,
   stops: (StopIn & LatLng)[],
-  key: string,
+  returnToStart: boolean,
 ): Promise<{ ordered: (StopIn & LatLng)[]; totalKm: number; provider: string }> {
   if (!stops.length) {
-    return { ordered: [], totalKm: 0, provider: "google-maps" };
-  }
-
-  const points = [start, ...stops];
-  const dist = await googleDistanceMatrix(points, key);
-  const orderIdx = optimizeOrderIndices(dist, 0, points.length);
-  const ordered = orderIdx.map((i) => stops[i - 1]);
-  const totalKm = await googleRoadKm(start, ordered, key);
-
-  return { ordered, totalKm, provider: "google-maps" };
-}
-
-async function optimizeOsrm(
-  start: LatLng,
-  stops: (StopIn & LatLng)[],
-): Promise<{ ordered: (StopIn & LatLng)[]; totalKm: number; provider: string }> {
-  if (stops.length === 0) {
     return { ordered: [], totalKm: 0, provider: "osrm" };
   }
 
   const points = [start, ...stops];
   const coords = points.map((p) => `${p.lng},${p.lat}`).join(";");
+  const roundtrip = returnToStart ? "true" : "false";
+  const dest = returnToStart ? "any" : "any";
   const url =
     `https://router.project-osrm.org/trip/v1/driving/${coords}` +
-    `?source=first&roundtrip=false&destination=any&overview=false&steps=false`;
+    `?source=first&roundtrip=${roundtrip}&destination=${dest}&overview=false&steps=false`;
 
   const res = await fetch(url);
-  if (!res.ok) throw new Error(`OSRM HTTP ${res.status}`);
+  if (!res.ok) throw new Error(`OSRM trip HTTP ${res.status}`);
   const data = (await res.json()) as {
     code: string;
     message?: string;
@@ -286,7 +186,7 @@ async function optimizeOsrm(
   };
 
   if (data.code !== "Ok" || !data.trips?.[0] || !data.waypoints) {
-    throw new Error(data.message || `OSRM: ${data.code}`);
+    throw new Error(data.message || `OSRM trip: ${data.code}`);
   }
 
   const indexed = stops.map((stop, i) => ({
@@ -298,8 +198,79 @@ async function optimizeOsrm(
   return {
     ordered: indexed.map((x) => x.stop),
     totalKm: Math.round((data.trips[0].distance / 1000) * 10) / 10,
-    provider: "osrm-driving",
+    provider: "osrm-trip",
   };
+}
+
+/** Fallback: tabela OSRM + vizinho mais próximo + rota real. */
+async function optimizeOsrmTable(
+  start: LatLng,
+  stops: (StopIn & LatLng)[],
+  returnToStart: boolean,
+): Promise<{ ordered: (StopIn & LatLng)[]; totalKm: number; provider: string }> {
+  const points = [start, ...stops];
+  const dist = await osrmTableKm(points);
+  const orderIdx = optimizeOrderIndices(dist, 0, points.length);
+  const ordered = orderIdx.map((i) => stops[i - 1]);
+  const path: LatLng[] = [start, ...ordered];
+  if (returnToStart) path.push(start);
+
+  let totalKm = 0;
+  try {
+    totalKm = await osrmRouteKm(path);
+  } catch {
+    let sum = 0;
+    let cur = 0;
+    for (const idx of orderIdx) {
+      sum += dist[cur][idx];
+      cur = idx;
+    }
+    if (returnToStart) sum += dist[cur][0];
+    totalKm = Math.round(sum * 10) / 10;
+  }
+
+  return { ordered, totalKm, provider: "osrm-table" };
+}
+
+async function optimizeRoute(
+  start: LatLng,
+  stops: (StopIn & LatLng)[],
+  returnToStart: boolean,
+): Promise<{ ordered: (StopIn & LatLng)[]; totalKm: number; provider: string }> {
+  try {
+    return await optimizeOsrmTrip(start, stops, returnToStart);
+  } catch (err) {
+    try {
+      return await optimizeOsrmTable(start, stops, returnToStart);
+    } catch (err2) {
+      // último recurso: ordem gulosa por haversine + km OSRM se possível
+      const points = [start, ...stops];
+      const dist = points.map((a) =>
+        points.map((b) => haversineKm(a, b)),
+      );
+      const orderIdx = optimizeOrderIndices(dist, 0, points.length);
+      const ordered = orderIdx.map((i) => stops[i - 1]);
+      const path: LatLng[] = [start, ...ordered];
+      if (returnToStart) path.push(start);
+      let totalKm = 0;
+      try {
+        totalKm = await osrmRouteKm(path);
+      } catch {
+        let sum = 0;
+        for (let i = 0; i < path.length - 1; i++) {
+          sum += haversineKm(path[i], path[i + 1]);
+        }
+        totalKm = Math.round(sum * 10) / 10;
+      }
+      return {
+        ordered,
+        totalKm,
+        provider: `osrm-fallback (${err instanceof Error ? err.message : "trip"}; ${
+          err2 instanceof Error ? err2.message : "table"
+        })`,
+      };
+    }
+  }
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -322,72 +293,71 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return bad(res, 400, "Informe ao menos uma parada");
     }
 
-    const googleKey = process.env.GOOGLE_MAPS_API_KEY?.trim();
-
     const start = await resolvePoint(
       body.startAddress,
       body.startLat,
       body.startLng,
-      googleKey,
     );
     if (!start) {
-      return bad(
-        res,
-        400,
-        "Não foi possível localizar o ponto de partida.",
-      );
+      return bad(res, 400, "Não foi possível localizar o ponto de partida.");
     }
 
     const resolvedStops: (StopIn & LatLng)[] = [];
-    for (const stop of body.stops) {
-      const point = await resolvePoint(
-        stop.address,
-        stop.lat,
-        stop.lng,
-        googleKey,
-      );
+    for (let i = 0; i < body.stops.length; i++) {
+      const stop = body.stops[i];
+      const needsGeo = stop.lat == null || stop.lng == null;
+      if (needsGeo && i > 0) await sleep(1100);
+      const point = await resolvePoint(stop.address, stop.lat, stop.lng);
       if (!point) {
         return bad(res, 400, `Não foi possível localizar: ${stop.address}`);
       }
       resolvedStops.push({ ...stop, ...point });
-      if (!googleKey && (stop.lat == null || stop.lng == null)) {
-        await new Promise((r) => setTimeout(r, 1100));
-      }
     }
 
-    let result;
-    if (googleKey) {
-      try {
-        result = await optimizeGoogle(start, resolvedStops, googleKey);
-      } catch (err) {
-        const fallback = await optimizeOsrm(start, resolvedStops);
-        result = {
-          ...fallback,
-          provider: `${fallback.provider} (fallback após Google: ${
-            err instanceof Error ? err.message : "erro"
-          })`,
-        };
-      }
-    } else {
-      result = await optimizeOsrm(start, resolvedStops);
-    }
+    const returnToStart = Boolean(body.returnToStart);
+    const result = await optimizeRoute(start, resolvedStops, returnToStart);
+    const totalKm = result.totalKm;
 
-    const ordered = result.ordered.map((s, i) => ({
-      id: s.id || crypto.randomUUID(),
-      addressId: s.addressId ?? null,
-      address: s.address,
-      label: s.label || s.address.split(",")[0].trim() || `Parada ${i + 1}`,
-      lat: s.lat,
-      lng: s.lng,
-    }));
+    const ordered = result.ordered.map((s, i) => {
+      const kinds = Array.isArray(s.kinds)
+        ? s.kinds.filter((k) => k === "entrega" || k === "retirada")
+        : [];
+      const resolvedKinds =
+        kinds.length > 0
+          ? [...new Set(kinds)]
+          : s.kind === "retirada"
+            ? ["retirada"]
+            : ["entrega"];
+      return {
+        id: s.id || crypto.randomUUID(),
+        addressId: s.addressId ?? null,
+        address: s.address,
+        label: s.label || s.address.split(",")[0].trim() || `Parada ${i + 1}`,
+        kinds: resolvedKinds,
+        kind: resolvedKinds.length === 1 ? resolvedKinds[0] : undefined,
+        notes: typeof s.notes === "string" ? s.notes : undefined,
+        boxes:
+          typeof s.boxes === "number" && Number.isFinite(s.boxes) && s.boxes > 0
+            ? Math.floor(s.boxes)
+            : 0,
+        complement:
+          typeof s.complement === "string" && s.complement.trim()
+            ? s.complement.trim()
+            : undefined,
+        hours: Array.isArray(s.hours) ? s.hours : undefined,
+        lat: s.lat,
+        lng: s.lng,
+      };
+    });
 
     return res.status(200).json({
       ok: true,
       start,
       stops: ordered,
-      totalKm: result.totalKm,
+      totalKm,
+      returnToStart,
       provider: result.provider,
-      usedGoogle: Boolean(googleKey) && result.provider.startsWith("google"),
+      usedGoogle: false,
     });
   } catch (err) {
     return bad(

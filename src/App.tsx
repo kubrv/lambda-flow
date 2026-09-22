@@ -1,50 +1,111 @@
-import { useEffect, useRef, useState } from "react";
-import { AdminPanel } from "./components/AdminPanel";
-import { DayTabs } from "./components/DayTabs";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { AdminShell, type AdminTab } from "./components/AdminShell";
+import { AuthScreen } from "./components/auth/AuthScreen";
+import { CompanySignupScreen } from "./components/auth/CompanySignupScreen";
+import { BillingScreen } from "./components/billing/BillingScreen";
 import { Header } from "./components/Header";
+import { LandingPage } from "./components/landing/LandingPage";
+import { MonthCalendar } from "./components/MonthCalendar";
 import { RouteView } from "./components/RouteView";
-import { isSupabaseConfigured } from "./lib/supabase";
+import { WhatsAppFloat } from "./components/WhatsAppFloat";
+import {
+  type Company,
+  type Profile,
+  companyHasActivePlan,
+  fetchCompany,
+  fetchProfile,
+  fetchSession,
+  signOut,
+} from "./lib/auth";
+import { localDateKey } from "./lib/dates";
+import { getSupabase, isSupabaseConfigured } from "./lib/supabase";
 import { loadData, saveData } from "./lib/storage";
-import type { AppData, Weekday } from "./lib/types";
-
-const ADMIN_KEY = "lambda-flow:admin";
-
-function todayWeekday(): Weekday {
-  const map: Weekday[] = ["dom", "seg", "ter", "qua", "qui", "sex", "sab"];
-  return map[new Date().getDay()];
-}
+import type { AppData } from "./lib/types";
+import { getRoute } from "./lib/types";
 
 export default function App() {
+  const today = localDateKey();
+  const todayDate = new Date();
+  const [authReady, setAuthReady] = useState(false);
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [company, setCompany] = useState<Company | null>(null);
   const [data, setData] = useState<AppData | null>(null);
-  const [day, setDay] = useState<Weekday>(() => todayWeekday());
-  const [isAdmin, setIsAdmin] = useState(
-    () => sessionStorage.getItem(ADMIN_KEY) === "1",
-  );
+  const [date, setDate] = useState(today);
+  const [year, setYear] = useState(todayDate.getFullYear());
+  const [monthIndex, setMonthIndex] = useState(todayDate.getMonth());
+  const [view, setView] = useState<"public" | "admin">("public");
+  const [adminTab, setAdminTab] = useState<AdminTab>("rotas");
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [gate, setGate] = useState<"landing" | "auth" | "signup">("landing");
   const skipFirstSave = useRef(true);
 
+  const refreshAuth = useCallback(async () => {
+    if (!isSupabaseConfigured()) {
+      setLoadError(
+        "Supabase não configurado. Defina VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY.",
+      );
+      setAuthReady(true);
+      return;
+    }
+    try {
+      const session = await fetchSession();
+      if (!session?.user) {
+        setProfile(null);
+        setCompany(null);
+        setAuthReady(true);
+        return;
+      }
+      const p = await fetchProfile(session.user.id);
+      setProfile(p);
+      if (p?.companyId) {
+        const c = await fetchCompany(p.companyId);
+        setCompany(c);
+        if (p.role === "company") setView("admin");
+      } else {
+        setCompany(null);
+      }
+    } catch (err) {
+      setLoadError(
+        err instanceof Error
+          ? err.message
+          : "Falha ao carregar sessão (rode migration_auth_billing.sql).",
+      );
+    } finally {
+      setAuthReady(true);
+    }
+  }, []);
+
   useEffect(() => {
+    void refreshAuth();
+    if (!isSupabaseConfigured()) return;
+    const sb = getSupabase();
+    const { data: sub } = sb.auth.onAuthStateChange(() => {
+      void refreshAuth();
+    });
+    return () => sub.subscription.unsubscribe();
+  }, [refreshAuth]);
+
+  useEffect(() => {
+    if (!profile) {
+      setData(null);
+      return;
+    }
     void (async () => {
       try {
-        if (!isSupabaseConfigured()) {
-          setLoadError(
-            "Supabase não configurado. Defina VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY no Vercel.",
-          );
-          return;
-        }
         const loaded = await loadData();
         setData(loaded);
+        skipFirstSave.current = true;
       } catch (err) {
         setLoadError(
           err instanceof Error ? err.message : "Falha ao carregar dados",
         );
       }
     })();
-  }, []);
+  }, [profile?.userId]);
 
   useEffect(() => {
-    if (!data) return;
+    if (!data || !profile) return;
     if (skipFirstSave.current) {
       skipFirstSave.current = false;
       return;
@@ -57,29 +118,51 @@ export default function App() {
             err instanceof Error ? err.message : "Falha ao salvar no Supabase",
           );
         });
-    }, 400);
+    }, 500);
     return () => window.clearTimeout(t);
-  }, [data]);
+  }, [data, profile]);
 
-  function unlockAdmin() {
-    sessionStorage.setItem(ADMIN_KEY, "1");
-    setIsAdmin(true);
+  async function handleSignOut() {
+    await signOut();
+    setProfile(null);
+    setCompany(null);
+    setData(null);
+    setView("public");
+    setGate("landing");
   }
 
-  function lockAdmin() {
-    sessionStorage.removeItem(ADMIN_KEY);
-    setIsAdmin(false);
+  function selectDate(next: string) {
+    setDate(next);
+    const [y, m] = next.split("-").map(Number);
+    setYear(y);
+    setMonthIndex(m - 1);
+  }
+
+  function changeMonth(y: number, m: number) {
+    setYear(y);
+    setMonthIndex(m);
+    const day = Math.min(
+      Number(date.slice(-2)),
+      new Date(y, m + 1, 0).getDate(),
+    );
+    setDate(
+      `${y}-${String(m + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`,
+    );
   }
 
   if (loadError) {
     return (
       <div className="app-shell">
         <div className="status err">{loadError}</div>
+        <p className="hint">
+          Rode no Supabase:{" "}
+          <code>supabase/migration_auth_billing.sql</code>
+        </p>
       </div>
     );
   }
 
-  if (!data) {
+  if (!authReady) {
     return (
       <div className="app-shell">
         <p className="hint">Carregando…</p>
@@ -87,12 +170,79 @@ export default function App() {
     );
   }
 
+  if (!profile) {
+    if (gate === "landing") {
+      return (
+        <div className="landing-shell">
+          <LandingPage
+            onLogin={() => setGate("auth")}
+            onCreateCompany={() => setGate("signup")}
+          />
+        </div>
+      );
+    }
+    if (gate === "signup") {
+      return (
+        <div className="app-shell">
+          <CompanySignupScreen
+            onAuthenticated={() => void refreshAuth()}
+            onBack={() => setGate("landing")}
+          />
+          <WhatsAppFloat />
+        </div>
+      );
+    }
+    return (
+      <div className="app-shell">
+        <AuthScreen
+          onAuthenticated={() => void refreshAuth()}
+          onBack={() => setGate("landing")}
+          onCreateCompany={() => setGate("signup")}
+        />
+        <WhatsAppFloat />
+      </div>
+    );
+  }
+
+  const isCompany = profile.role === "company";
+  const planOk = !isCompany || companyHasActivePlan(company);
+
+  if (isCompany && company && !planOk) {
+    return (
+      <div className="app-shell">
+        <Header
+          subtitle={`${company.name} · plano pendente`}
+          onSignOut={() => void handleSignOut()}
+        />
+        <BillingScreen
+          company={company}
+          onRefresh={() => void refreshAuth()}
+        />
+      </div>
+    );
+  }
+
+  if (!data) {
+    return (
+      <div className="app-shell">
+        <p className="hint">Carregando rotas…</p>
+      </div>
+    );
+  }
+
   return (
     <div className="app-shell">
       <Header
-        isAdmin={isAdmin}
-        onUnlock={unlockAdmin}
-        onLock={lockAdmin}
+        subtitle={
+          isCompany
+            ? `${company?.name || "Empresa"} · admin`
+            : `${profile.fullName || "Motoboy"} · rotas`
+        }
+        showAdminLink={isCompany}
+        view={view}
+        onOpenAdmin={() => setView("admin")}
+        onOpenPublic={() => setView("public")}
+        onSignOut={() => void handleSignOut()}
       />
 
       {saveError ? (
@@ -101,11 +251,40 @@ export default function App() {
         </div>
       ) : null}
 
-      <DayTabs value={day} onChange={setDay} />
-      <RouteView day={day} route={data.routes[day]} motoboys={data.motoboys} />
-      {isAdmin ? (
-        <AdminPanel data={data} day={day} onChange={setData} />
-      ) : null}
+      {isCompany && view === "admin" ? (
+        <AdminShell
+          data={data}
+          date={date}
+          year={year}
+          monthIndex={monthIndex}
+          tab={adminTab}
+          company={company}
+          onTabChange={setAdminTab}
+          onChange={setData}
+          onSelectDate={selectDate}
+          onMonthChange={changeMonth}
+          onBackToRoutes={() => setView("public")}
+          onRefreshCompany={() => void refreshAuth()}
+        />
+      ) : (
+        <>
+          <MonthCalendar
+            year={year}
+            monthIndex={monthIndex}
+            selectedDate={date}
+            data={data}
+            onMonthChange={changeMonth}
+            onSelectDate={selectDate}
+          />
+          <RouteView
+            date={date}
+            route={getRoute(data, date)}
+            motoboys={data.motoboys}
+            pricePerKm={data.pricePerKm}
+          />
+        </>
+      )}
+      <WhatsAppFloat />
     </div>
   );
 }

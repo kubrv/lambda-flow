@@ -19,11 +19,18 @@ export async function optimizeRouteApi(input: {
   startAddress: string;
   startLat: number | null;
   startLng: number | null;
+  returnToStart?: boolean;
   stops: {
     id?: string;
     addressId?: string | null;
     address: string;
     label?: string;
+    kind?: string;
+    kinds?: string[];
+    notes?: string;
+    boxes?: number;
+    complement?: string;
+    hours?: { open: string; close: string }[];
     lat: number | null;
     lng: number | null;
   }[];
