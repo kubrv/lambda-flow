@@ -34,6 +34,7 @@ export function AdminPanel({ data, day, onChange }: Props) {
       ? `${route.startLat}, ${route.startLng}`
       : "",
   );
+  const [startAddressId, setStartAddressId] = useState("");
   const [motoboyId, setMotoboyId] = useState(route.motoboyId ?? "");
   const [selectedIds, setSelectedIds] = useState<string[]>(() =>
     route.stops
@@ -54,6 +55,11 @@ export function AdminPanel({ data, day, onChange }: Props) {
         ? `${route.startLat}, ${route.startLng}`
         : "",
     );
+    const startHit = data.addresses.find(
+      (a) =>
+        normalizeAddress(a.address) === normalizeAddress(route.startAddress),
+    );
+    setStartAddressId(startHit?.id ?? "");
     setMotoboyId(route.motoboyId ?? "");
 
     const ids = route.stops
@@ -67,6 +73,19 @@ export function AdminPanel({ data, day, onChange }: Props) {
       .filter((id): id is string => Boolean(id));
     setSelectedIds(ids);
   }, [day, route, data.addresses]);
+
+  function applyStartFromCatalog(id: string) {
+    setStartAddressId(id);
+    if (!id) return;
+    const saved = data.addresses.find((a) => a.id === id);
+    if (!saved) return;
+    setStartAddress(saved.address);
+    if (saved.lat != null && saved.lng != null) {
+      setStartCoords(`${saved.lat}, ${saved.lng}`);
+    } else {
+      setStartCoords("");
+    }
+  }
 
   const previewKm = useMemo(() => formatKm(route.totalKm), [route.totalKm]);
 
@@ -115,6 +134,18 @@ export function AdminPanel({ data, day, onChange }: Props) {
       if (hist.startLat != null && hist.startLng != null) {
         setStartCoords(`${hist.startLat}, ${hist.startLng}`);
       }
+      addresses = upsertSavedAddress(addresses, {
+        label: "Ponto de partida",
+        address: hist.startAddress,
+        lat: hist.startLat,
+        lng: hist.startLng,
+      });
+      const startSaved = addresses.find(
+        (a) =>
+          normalizeAddress(a.address) ===
+          normalizeAddress(hist.startAddress),
+      );
+      if (startSaved) setStartAddressId(startSaved.id);
     }
 
     patchData({ ...data, addresses });
@@ -319,11 +350,35 @@ export function AdminPanel({ data, day, onChange }: Props) {
       <div className="split">
         <div className="form-grid">
           <div className="field">
-            <label htmlFor="start">Ponto de partida</label>
+            <label htmlFor="start-from-catalog">Ponto de partida</label>
+            <select
+              id="start-from-catalog"
+              value={startAddressId}
+              onChange={(e) => applyStartFromCatalog(e.target.value)}
+            >
+              <option value="">Escolher da lista cadastrada…</option>
+              {data.addresses.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.label} — {a.address}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="field">
+            <label htmlFor="start">Ou digite o endereço de partida</label>
             <input
               id="start"
               value={startAddress}
-              onChange={(e) => setStartAddress(e.target.value)}
+              onChange={(e) => {
+                setStartAddress(e.target.value);
+                const hit = data.addresses.find(
+                  (a) =>
+                    normalizeAddress(a.address) ===
+                    normalizeAddress(e.target.value),
+                );
+                setStartAddressId(hit?.id ?? "");
+              }}
               placeholder="Ex: R. União, 510 - Poá - SP"
             />
           </div>
