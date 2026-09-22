@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Lambda-Strike  mark only on dark square -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Lambda-Strike mark dark">
+  <title>Lambda-Strike Mark Dark</title>
+  <rect width="64" height="64" rx="16" fill="#031018"/>
+  <g fill="#38E8FF">
+    <path d="M18 54 L32 10 L38 10 L24 54 Z"/>
+    <path d="M28 34 L50 54 L42 54 L26 38 Z"/>
+  </g>
+</svg>

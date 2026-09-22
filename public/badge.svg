@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Lambda-Strike  badge as in the panel (cyan gradient + dark ») -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="Lambda-Strike badge">
+  <title>Lambda-Strike Badge</title>
+  <defs>
+    <linearGradient id="badgeGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#38E8FF"/>
+      <stop offset="100%" stop-color="#00C2D8"/>
+    </linearGradient>
+    <filter id="glow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="6" result="b"/>
+      <feMerge>
+        <feMergeNode in="b"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  <rect x="8" y="8" width="112" height="112" rx="28" fill="url(#badgeGrad)" filter="url(#glow)"/>
+  <g transform="translate(32 32) scale(1)" fill="#031018">
+    <path d="M18 54 L32 10 L38 10 L24 54 Z"/>
+    <path d="M28 34 L50 54 L42 54 L26 38 Z"/>
+  </g>
+</svg>
