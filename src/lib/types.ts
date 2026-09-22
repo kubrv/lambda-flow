@@ -23,8 +23,18 @@ export type Motoboy = {
   phone?: string;
 };
 
+/** Endereço cadastrado uma vez e reutilizável em qualquer dia. */
+export type SavedAddress = {
+  id: string;
+  label: string;
+  address: string;
+  lat: number | null;
+  lng: number | null;
+};
+
 export type Stop = {
   id: string;
+  addressId?: string | null;
   address: string;
   label?: string;
   lat: number | null;
@@ -44,8 +54,9 @@ export type DayRoute = {
 
 export type AppData = {
   motoboys: Motoboy[];
+  addresses: SavedAddress[];
   routes: Record<Weekday, DayRoute>;
-  /** Cache local de coordenadas por endereço (sem APIs externas). */
+  /** Cache de coordenadas por endereço normalizado. */
   coordCache: Record<string, { lat: number; lng: number }>;
 };
 

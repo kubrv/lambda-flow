@@ -7,6 +7,7 @@ export type OptimizeResult = {
   stops: Stop[];
   totalKm: number;
   provider: string;
+  usedGoogle?: boolean;
 };
 
 export type OptimizeError = {
@@ -20,6 +21,7 @@ export async function optimizeRouteApi(input: {
   startLng: number | null;
   stops: {
     id?: string;
+    addressId?: string | null;
     address: string;
     label?: string;
     lat: number | null;

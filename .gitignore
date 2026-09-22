@@ -12,3 +12,5 @@ data/store.json
 data/store.json.tmp
 .vscode/*
 !.vscode/extensions.json
+
+.vercel
