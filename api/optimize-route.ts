@@ -376,7 +376,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       id: s.id || crypto.randomUUID(),
       addressId: s.addressId ?? null,
       address: s.address,
-      label: s.label || `Parada ${i + 1}`,
+      label: s.label || s.address.split(",")[0].trim() || `Parada ${i + 1}`,
       lat: s.lat,
       lng: s.lng,
     }));

@@ -1,4 +1,5 @@
 import { formatKm } from "../lib/geo";
+import { motoboyStopTitle } from "../lib/labels";
 import {
   googleMapsDirectionsUrl,
   wazeNavigateUrl,
@@ -90,7 +91,9 @@ export function RouteView({ day, route, motoboys }: Props) {
               <div className="stop" key={stop.id}>
                 <div className="stop-index">{index + 1}</div>
                 <div className="stop-body">
-                  <strong>{stop.label || `Parada ${index + 1}`}</strong>
+                  <strong>
+                    {motoboyStopTitle(index, stop.label, stop.address)}
+                  </strong>
                   <p>{stop.address}</p>
                 </div>
                 <div className="stop-actions">

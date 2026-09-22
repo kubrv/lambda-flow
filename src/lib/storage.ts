@@ -9,6 +9,7 @@ import type {
 } from "./types";
 import { WEEKDAYS, createId, emptyRoute } from "./types";
 import { normalizeAddress } from "./parseAddress";
+import { cleanNickname, isAutoStopLabel } from "./labels";
 
 type DayRouteRow = {
   day: Weekday;
@@ -62,12 +63,14 @@ export function syncCatalogFromRoutes(data: AppData): AppData {
           existing.lat = stop.lat;
           existing.lng = stop.lng;
         }
-        if (!existing.label && stop.label) existing.label = stop.label;
+        if (isAutoStopLabel(existing.label) && stop.label) {
+          existing.label = cleanNickname(stop.label, stop.address);
+        }
         continue;
       }
       const saved: SavedAddress = {
         id: stop.addressId || createId(),
-        label: stop.label || stop.address.split(",")[0].trim(),
+        label: cleanNickname(stop.label, stop.address),
         address: stop.address,
         lat: stop.lat,
         lng: stop.lng,
@@ -93,15 +96,17 @@ export function upsertSavedAddress(
   const idx = addresses.findIndex(
     (a) => normalizeAddress(a.address) === key || (input.id && a.id === input.id),
   );
+  const incoming = cleanNickname(input.label, input.address);
+  const prev = addresses[idx];
   const next: SavedAddress = {
-    id: input.id || addresses[idx]?.id || createId(),
+    id: input.id || prev?.id || createId(),
     label:
-      input.label?.trim() ||
-      addresses[idx]?.label ||
-      input.address.split(",")[0].trim(),
+      !isAutoStopLabel(incoming)
+        ? incoming
+        : cleanNickname(prev?.label, input.address),
     address: input.address.trim(),
-    lat: input.lat ?? addresses[idx]?.lat ?? null,
-    lng: input.lng ?? addresses[idx]?.lng ?? null,
+    lat: input.lat ?? prev?.lat ?? null,
+    lng: input.lng ?? prev?.lng ?? null,
   };
   if (idx >= 0) {
     const copy = [...addresses];
@@ -190,7 +195,10 @@ export async function saveData(data: AppData): Promise<void> {
   }
 
   const addrExisting = await sb.from("addresses").select("id");
-  if (!addrExisting.error) {
+  if (addrExisting.error) {
+    // Tabela ainda não migrada: catálogo vive nas rotas até rodar migration_addresses.sql
+    console.warn("addresses table unavailable:", addrExisting.error.message);
+  } else {
     const existingAddr = new Set(
       (addrExisting.data || []).map((a) => a.id as string),
     );
