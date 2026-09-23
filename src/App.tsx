@@ -8,6 +8,7 @@ import { LandingPage } from "./components/landing/LandingPage";
 import { MonthCalendar } from "./components/MonthCalendar";
 import { RouteView } from "./components/RouteView";
 import { WhatsAppFloat } from "./components/WhatsAppFloat";
+import { SiteFooter } from "./components/SiteFooter";
 import {
   type Company,
   type Profile,
@@ -189,6 +190,7 @@ export default function App() {
             onBack={() => setGate("landing")}
           />
           <WhatsAppFloat />
+          <SiteFooter compact />
         </div>
       );
     }
@@ -200,6 +202,7 @@ export default function App() {
           onCreateCompany={() => setGate("signup")}
         />
         <WhatsAppFloat />
+        <SiteFooter compact />
       </div>
     );
   }
@@ -285,6 +288,7 @@ export default function App() {
         </>
       )}
       <WhatsAppFloat />
+      <SiteFooter compact />
     </div>
   );
 }

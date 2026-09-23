@@ -2059,6 +2059,11 @@ a {
   margin-top: 2.5rem;
   padding-top: 1.5rem;
   border-top: 1px solid var(--line);
+  display: grid;
+  gap: 1.25rem;
+}
+
+.landing-footer-top {
   display: flex;
   flex-wrap: wrap;
   gap: 0.75rem 1.25rem;
@@ -2066,8 +2071,45 @@ a {
   justify-content: space-between;
 }
 
-.landing-footer span {
+.landing-footer-top > span {
   color: var(--muted);
+}
+
+.site-footer {
+  display: grid;
+  gap: 0.55rem;
+  padding: 0.85rem 0 0.25rem;
+}
+
+.site-footer-legal {
+  margin: 0;
+  font-size: 0.72rem;
+  line-height: 1.45;
+  color: var(--muted);
+  max-width: 52rem;
+}
+
+.site-footer-meta {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.85rem;
+  align-items: center;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.site-footer-version {
+  font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+  font-size: 0.75rem;
+  color: var(--cyan);
+  letter-spacing: 0.02em;
+}
+
+.app-shell > .site-footer {
+  margin-top: 2rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--line);
 }
 
 .pay-method-row {

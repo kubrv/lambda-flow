@@ -2,6 +2,7 @@ import { useState, type CSSProperties } from "react";
 import { PLAN_PRICE_BRL } from "../../lib/auth";
 import { formatMoneyBRL } from "../../lib/labels";
 import { BrandLogo } from "../BrandLogo";
+import { SiteFooter } from "../SiteFooter";
 import { WhatsAppFloat } from "../WhatsAppFloat";
 
 type Props = {
@@ -397,11 +398,14 @@ export function LandingPage({ onLogin, onCreateCompany }: Props) {
       </section>
 
       <footer className="landing-footer">
-        <BrandLogo height={36} />
-        <span>Rotas · Maps · Waze · Financeiro</span>
-        <button type="button" className="btn" onClick={onLogin}>
-          Entrar
-        </button>
+        <div className="landing-footer-top">
+          <BrandLogo height={36} />
+          <span>Rotas · Maps · Waze · Financeiro</span>
+          <button type="button" className="btn" onClick={onLogin}>
+            Entrar
+          </button>
+        </div>
+        <SiteFooter />
       </footer>
 
       <WhatsAppFloat />
