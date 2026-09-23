@@ -121,7 +121,10 @@ export function printPeriodFinancePdf(input: {
     th { font-size: 8.5pt; text-transform: uppercase; color: #5a6b75; }
   `;
 
-  printHtmlDocument(title, body, styles);
+  printHtmlDocument(title, body, styles, {
+    fileName: title,
+    fitOnePage: true,
+  });
 }
 
 /** Alias antigo */

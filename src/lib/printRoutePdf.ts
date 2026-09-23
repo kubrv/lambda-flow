@@ -1,6 +1,6 @@
 import { formatKm } from "./geo";
 import { formatMoneyBRL, motoboyStopTitle } from "./labels";
-import { formatDateLabel } from "./dates";
+import { formatDateLabel, formatDateShort } from "./dates";
 import { formatHoursLabel, normalizeHoursPeriods } from "./hours";
 import {
   googleMapsDirectionsUrl,
@@ -17,6 +17,15 @@ import {
   totalBoxes,
 } from "./types";
 
+/** Logo embutido (badge) para o PDF — não depende de rede. */
+const LOGO_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="40" height="40" aria-hidden="true">
+  <rect width="64" height="64" rx="14" fill="#38E8FF"/>
+  <g fill="#031018" transform="translate(8 8) scale(0.75)">
+    <path d="M18 54 L32 10 L38 10 L24 54 Z"/>
+    <path d="M28 34 L50 54 L42 54 L26 38 Z"/>
+  </g>
+</svg>`;
+
 function navButtonsHtml(
   mapsUrl: string,
   wazeUrl: string,
@@ -30,6 +39,12 @@ function navButtonsHtml(
     </div>`;
 }
 
+/** Nome do arquivo: Rota-dia-DD-MM-AAAA */
+export function dayRouteFileName(dateKey: string): string {
+  const short = formatDateShort(dateKey).replace(/\//g, "-");
+  return `Rota-dia-${short}`;
+}
+
 export function printDayRoutePdf(input: {
   date: string;
   route: DayRoute;
@@ -37,6 +52,7 @@ export function printDayRoutePdf(input: {
   pricePerKm: number;
 }): void {
   const dayLabel = formatDateLabel(input.date);
+  const fileName = dayRouteFileName(input.date);
   const motoboy = input.motoboys.find((m) => m.id === input.route.motoboyId);
   const rate =
     Number.isFinite(input.pricePerKm) && input.pricePerKm > 0
@@ -130,8 +146,14 @@ export function printDayRoutePdf(input: {
     : "";
 
   const body = `
-  <h1>Lambda Flow — Rota</h1>
-  <p class="sub">${esc(dayLabel)} · gerado em ${esc(generatedAt)}</p>
+  <header class="brand-head">
+    <div class="brand-mark">${LOGO_SVG}</div>
+    <div class="brand-text">
+      <div class="brand-name">Lambda-Flow</div>
+      <h1>Relatório do dia — ${esc(dayLabel)}</h1>
+      <p class="sub">Gerado em ${esc(generatedAt)}</p>
+    </div>
+  </header>
 
   ${
     fullRouteUrl
@@ -221,8 +243,19 @@ export function printDayRoutePdf(input: {
   }`;
 
   const styles = `
-    h1 { font-size: 18pt; margin: 0 0 4px; }
-    .sub { color: #4a5b66; margin: 0 0 14px; font-size: 9.5pt; }
+    .brand-head {
+      display: flex; align-items: center; gap: 12px;
+      margin: 0 0 14px; padding-bottom: 10px;
+      border-bottom: 2px solid #0d6e7a;
+    }
+    .brand-mark { flex-shrink: 0; line-height: 0; }
+    .brand-mark svg { display: block; }
+    .brand-name {
+      font-size: 11pt; font-weight: 800; letter-spacing: 0.04em;
+      color: #0d6e7a; margin: 0 0 2px;
+    }
+    h1 { font-size: 15pt; margin: 0 0 2px; line-height: 1.2; }
+    .sub { color: #4a5b66; margin: 0; font-size: 9pt; }
     .route-cta {
       display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
       margin: 0 0 14px; padding: 12px;
@@ -304,5 +337,8 @@ export function printDayRoutePdf(input: {
     .disclaimer { margin-top: 6px; font-size: 8.5pt; color: #5a6b75; }
   `;
 
-  printHtmlDocument(`Rota ${dayLabel}`, body, styles);
+  printHtmlDocument(fileName, body, styles, {
+    fileName,
+    fitOnePage: false,
+  });
 }

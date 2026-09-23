@@ -1,0 +1,14 @@
+{
+  "autoRun": {
+    "allow_instructions": [
+      "Allow all npm, npx, node, and vite commands in this lambda-flow project, including build and preview.",
+      "Allow Vercel CLI deploy to production for this project (npx vercel --prod --yes and similar).",
+      "Allow git status, diff, log, add, commit, push, pull, and branch commands for this repository when the user or agent needs them.",
+      "Allow PowerShell and Windows shell commands used for local development in this workspace.",
+      "Allow reading and writing project files and deploying static frontend changes for lambda-flow."
+    ],
+    "block_instructions": [
+      "Still block git push --force, git reset --hard, and dropping production databases unless the user explicitly asked in the same message."
+    ]
+  }
+}

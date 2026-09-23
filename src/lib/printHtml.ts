@@ -6,19 +6,32 @@ function esc(text: string): string {
     .replace(/"/g, "&quot;");
 }
 
+export type PrintHtmlOptions = {
+  /** Nome sugerido ao salvar PDF (vira o <title> — ex.: Rota-dia-22-09-2026). */
+  fileName?: string;
+  /** Se true, escala o conteúdo para tentar caber em 1 página. */
+  fitOnePage?: boolean;
+};
+
 function buildDocumentHtml(
   title: string,
   bodyHtml: string,
   styles: string,
+  options: PrintHtmlOptions = {},
 ): string {
+  const fileTitle = (options.fileName || title)
+    .replace(/\.pdf$/i, "")
+    .trim();
+  const fit = Boolean(options.fitOnePage);
+
   return `<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>${esc(title)}</title>
+  <title>${esc(fileTitle)}</title>
   <style>
-    @page { size: A4; margin: 14mm; }
+    @page { size: A4; margin: 12mm; }
     * { box-sizing: border-box; }
     body {
       font-family: "Segoe UI", Arial, sans-serif;
@@ -45,6 +58,7 @@ function buildDocumentHtml(
     .toolbar .hint {
       font-size: 9.5pt; color: #9ecad6; margin: 0;
     }
+    .sheet { width: 100%; transform-origin: top left; }
     ${styles}
     @media print {
       .no-print { display: none !important; }
@@ -53,13 +67,49 @@ function buildDocumentHtml(
   </style>
 </head>
 <body>
+  <script>document.title = ${JSON.stringify(fileTitle)};</script>
   <div class="toolbar no-print">
-    <button type="button" class="print-btn" onclick="window.print()">
+    <button type="button" class="print-btn" id="printBtn">
       Imprimir / Salvar PDF
     </button>
-    <p class="hint">Os botões Maps e Waze são clicáveis aqui e também no PDF salvo.</p>
+    <p class="hint">Ao salvar, use o nome sugerido: <strong>${esc(fileTitle)}.pdf</strong></p>
   </div>
+  <div class="sheet" id="sheet">
   ${bodyHtml}
+  </div>
+  <script>
+(function () {
+  var FILE = ${JSON.stringify(fileTitle)};
+  document.title = FILE;
+  function ensureTitle() { document.title = FILE; }
+  window.addEventListener("beforeprint", ensureTitle);
+  document.getElementById("printBtn")?.addEventListener("click", function () {
+    ensureTitle();
+    window.print();
+  });
+  ${
+    fit
+      ? `
+  function fit() {
+    var sheet = document.getElementById("sheet");
+    if (!sheet) return;
+    sheet.style.transform = "none";
+    sheet.style.width = "100%";
+    var maxH = 700;
+    var h = sheet.scrollHeight;
+    var scale = Math.min(1, maxH / Math.max(h, 1));
+    if (scale < 0.98) {
+      sheet.style.transform = "scale(" + scale.toFixed(4) + ")";
+      sheet.style.width = (100 / scale).toFixed(2) + "%";
+    }
+  }
+  window.addEventListener("beforeprint", fit);
+  setTimeout(fit, 80);
+  `
+      : ""
+  }
+})();
+  </script>
 </body>
 </html>`;
 }
@@ -72,21 +122,38 @@ export function printHtmlDocument(
   title: string,
   bodyHtml: string,
   styles: string,
+  options: PrintHtmlOptions = {},
 ): void {
-  const html = buildDocumentHtml(title, bodyHtml, styles);
+  const fileTitle = (options.fileName || title).replace(/\.pdf$/i, "").trim();
+  const html = buildDocumentHtml(title, bodyHtml, styles, {
+    ...options,
+    fileName: fileTitle,
+  });
 
-  const win = window.open("", "_blank", "noopener,noreferrer");
+  const win = window.open("", "_blank");
   if (win) {
     win.document.open();
     win.document.write(html);
     win.document.close();
+    try {
+      win.document.title = fileTitle;
+    } catch {
+      // ignore
+    }
+    // Reforça o título após o parse (Chrome usa isso no "Salvar como PDF")
+    window.setTimeout(() => {
+      try {
+        win.document.title = fileTitle;
+      } catch {
+        // ignore
+      }
+    }, 50);
     win.focus();
     return;
   }
 
-  // Fallback sem pop-up: iframe + diálogo de impressão
   const iframe = document.createElement("iframe");
-  iframe.setAttribute("title", title);
+  iframe.setAttribute("title", fileTitle);
   iframe.style.cssText =
     "position:fixed;right:0;bottom:0;width:0;height:0;border:0;opacity:0;pointer-events:none;";
   document.body.appendChild(iframe);
@@ -100,9 +167,17 @@ export function printHtmlDocument(
   doc.open();
   doc.write(html);
   doc.close();
+  try {
+    doc.title = fileTitle;
+  } catch {
+    // ignore
+  }
 
   const runPrint = () => {
     try {
+      if (iframe.contentDocument) {
+        iframe.contentDocument.title = fileTitle;
+      }
       iframe.contentWindow?.focus();
       iframe.contentWindow?.print();
     } finally {
