@@ -2192,6 +2192,13 @@ a {
   font-size: 0.75rem;
   color: var(--cyan);
   letter-spacing: 0.02em;
+  font-weight: 700;
+}
+
+.site-footer-build {
+  font-size: 0.72rem;
+  color: var(--muted);
+  opacity: 0.9;
 }
 
 .app-shell > .site-footer {

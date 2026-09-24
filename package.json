@@ -4,10 +4,13 @@
   "version": "0.2.0",
   "type": "module",
   "scripts": {
+    "predev": "node scripts/write-build-info.mjs",
     "dev": "vite",
+    "prebuild": "node scripts/write-build-info.mjs",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
-    "start": "vite preview"
+    "start": "vite preview",
+    "version:stamp": "node scripts/write-build-info.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.1",

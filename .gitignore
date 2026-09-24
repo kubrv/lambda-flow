@@ -14,3 +14,4 @@ data/store.json.tmp
 !.vscode/extensions.json
 
 .vercel
+public/version.json
