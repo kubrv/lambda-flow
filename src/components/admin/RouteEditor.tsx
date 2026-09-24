@@ -33,11 +33,13 @@ import {
   stopKindsToFlags,
   totalBoxes,
 } from "../../lib/types";
+import { RouteCompletionPanel } from "../RouteCompletionPanel";
 
 type Props = {
   data: AppData;
   date: string;
   onChange: (next: AppData) => void;
+  actorName?: string;
 };
 
 type Status = { kind: "idle" | "ok" | "err" | "busy"; text: string };
@@ -67,7 +69,7 @@ function hydrateFromRoute(route: DayRoute, addresses: SavedAddress[]) {
   return { selectedIds, stopKinds, stopNotes, stopBoxes };
 }
 
-export function RouteEditor({ data, date, onChange }: Props) {
+export function RouteEditor({ data, date, onChange, actorName = "Admin" }: Props) {
   const saved = getRoute(data, date);
   const dayLabel = formatDateLabel(date);
   const preset = resolvePresetStart(data);
@@ -324,6 +326,13 @@ export function RouteEditor({ data, date, onChange }: Props) {
         totalKm: result.totalKm,
         returnToStart,
         optimizedAt: new Date().toISOString(),
+        completionStatus: saved.completionStatus || "open",
+        motoboyReport: saved.motoboyReport || "",
+        motoboyCompletedAt: saved.motoboyCompletedAt || null,
+        motoboyCompletedBy: saved.motoboyCompletedBy || "",
+        adminReport: saved.adminReport || "",
+        adminVerifiedAt: saved.adminVerifiedAt || null,
+        adminVerifiedBy: saved.adminVerifiedBy || "",
       };
 
       const price = resolveMotoboyPricePerKm(
@@ -597,6 +606,21 @@ export function RouteEditor({ data, date, onChange }: Props) {
             {status.text}
           </div>
         ) : null}
+
+        <RouteCompletionPanel
+          route={saved}
+          role="company"
+          actorName={actorName}
+          canComplete={
+            Boolean(saved.startAddress.trim()) || saved.stops.length > 0
+          }
+          onUpdate={(next) => {
+            onChange({
+              ...data,
+              routesByDate: { ...data.routesByDate, [date]: next },
+            });
+          }}
+        />
       </div>
     </section>
   );

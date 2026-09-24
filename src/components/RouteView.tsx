@@ -20,6 +20,7 @@ import {
   resolveStopKinds,
   totalBoxes,
 } from "../lib/types";
+import { RouteCompletionPanel } from "./RouteCompletionPanel";
 
 type Props = {
   date: string;
@@ -27,9 +28,20 @@ type Props = {
   motoboys: Motoboy[];
   /** Fallback legado se o motoboy não tiver preço. */
   pricePerKm?: number;
+  role?: "company" | "motoboy";
+  actorName?: string;
+  onRouteChange?: (next: DayRoute) => void;
 };
 
-export function RouteView({ date, route, motoboys, pricePerKm }: Props) {
+export function RouteView({
+  date,
+  route,
+  motoboys,
+  pricePerKm,
+  role = "motoboy",
+  actorName = "",
+  onRouteChange,
+}: Props) {
   const dayLabel = formatDateLabel(date);
   const motoboy = motoboys.find((m) => m.id === route.motoboyId);
   const rate = resolveMotoboyPricePerKm(
@@ -306,6 +318,16 @@ export function RouteView({ date, route, motoboys, pricePerKm }: Props) {
               </span>
             ) : null}
           </div>
+
+          {onRouteChange ? (
+            <RouteCompletionPanel
+              route={route}
+              role={role}
+              actorName={actorName}
+              canComplete={hasStart || hasStops}
+              onUpdate={onRouteChange}
+            />
+          ) : null}
         </>
       )}
     </section>

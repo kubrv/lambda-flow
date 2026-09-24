@@ -763,8 +763,96 @@ a {
   transform: translateX(-50%);
 }
 
+.month-day.has-route .dot.pending {
+  background: #f0a020;
+  box-shadow: 0 0 8px rgba(240, 160, 32, 0.55);
+}
+
+.month-day.has-route .dot.verified {
+  background: #2ecc71;
+  box-shadow: 0 0 8px rgba(46, 204, 113, 0.5);
+}
+
+.month-day.pending-verify {
+  border-color: rgba(240, 160, 32, 0.45);
+}
+
+.month-day.verified {
+  border-color: rgba(46, 204, 113, 0.45);
+}
+
 .month-day .day-num {
   font-size: 0.9rem;
+}
+
+.route-completion {
+  margin-top: 1.25rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--line);
+}
+
+.route-completion-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem 0.85rem;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.65rem;
+}
+
+.route-completion-head h3 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.route-status-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 0.35rem 0.7rem;
+  border-radius: 999px;
+  letter-spacing: 0.02em;
+}
+
+.route-status-badge.open {
+  color: var(--muted);
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.route-status-badge.pending {
+  color: #031018;
+  background: linear-gradient(135deg, #f0a020, #e08910);
+}
+
+.route-status-badge.verified {
+  color: #031018;
+  background: linear-gradient(135deg, #2ecc71, #1fa855);
+}
+
+.report-box {
+  display: grid;
+  gap: 0.25rem;
+  margin: 0.55rem 0;
+  padding: 0.75rem 0.85rem;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.report-box.boy {
+  border-color: rgba(240, 160, 32, 0.35);
+}
+
+.report-box.admin {
+  border-color: rgba(46, 204, 113, 0.35);
+}
+
+.report-box p {
+  margin: 0.25rem 0 0;
+  white-space: pre-wrap;
+  line-height: 1.4;
 }
 
 .admin-shell-head {

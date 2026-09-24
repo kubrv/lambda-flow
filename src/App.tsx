@@ -284,6 +284,14 @@ export default function App() {
             route={getRoute(data, date)}
             motoboys={data.motoboys}
             pricePerKm={data.pricePerKm}
+            role={isCompany ? "company" : "motoboy"}
+            actorName={profile.fullName || profile.email || ""}
+            onRouteChange={(next) => {
+              setData({
+                ...data,
+                routesByDate: { ...data.routesByDate, [date]: next },
+              });
+            }}
           />
         </>
       )}

@@ -6,6 +6,7 @@ import {
   weekdayFromDateKey,
 } from "../lib/dates";
 import { WEEKDAYS, getRoute, type AppData } from "../lib/types";
+import { completionDotClass } from "./RouteCompletionPanel";
 
 type Props = {
   year: number;
@@ -76,12 +77,26 @@ export function MonthCalendar({
               type="button"
               className={`month-day${selectedDate === key ? " active" : ""}${
                 hasRoute ? " has-route" : ""
+              }${
+                hasRoute && route.completionStatus === "verified"
+                  ? " verified"
+                  : hasRoute && route.completionStatus === "completed"
+                    ? " pending-verify"
+                    : ""
               }`}
               onClick={() => onSelectDate(key)}
-              title={`${wd?.label ?? ""} ${formatDateShort(key)}`}
+              title={`${wd?.label ?? ""} ${formatDateShort(key)}${
+                route.completionStatus === "verified"
+                  ? " · verificada"
+                  : route.completionStatus === "completed"
+                    ? " · aguarda verificação"
+                    : ""
+              }`}
             >
               <span className="day-num">{dayNum}</span>
-              {hasRoute ? <span className="dot" /> : null}
+              {hasRoute ? (
+                <span className={completionDotClass(route)} />
+              ) : null}
             </button>
           );
         })}

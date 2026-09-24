@@ -43,6 +43,13 @@ type DateRouteRow = {
   total_km: number | null;
   return_to_start?: boolean | null;
   optimized_at: string | null;
+  completion_status?: string | null;
+  motoboy_report?: string | null;
+  motoboy_completed_at?: string | null;
+  motoboy_completed_by?: string | null;
+  admin_report?: string | null;
+  admin_verified_at?: string | null;
+  admin_verified_by?: string | null;
 };
 
 type CoordRow = {
@@ -101,6 +108,9 @@ function mapStops(stops: Stop[] | null | undefined): Stop[] {
 
 function mapDateRoute(row: DateRouteRow): DayRoute {
   const date = String(row.route_date).slice(0, 10);
+  const rawStatus = (row.completion_status || "open").toLowerCase();
+  const completionStatus =
+    rawStatus === "verified" || rawStatus === "completed" ? rawStatus : "open";
   return {
     date,
     startAddress: row.start_address || "",
@@ -111,6 +121,13 @@ function mapDateRoute(row: DateRouteRow): DayRoute {
     totalKm: Number(row.total_km || 0),
     returnToStart: Boolean(row.return_to_start),
     optimizedAt: row.optimized_at,
+    completionStatus,
+    motoboyReport: row.motoboy_report || "",
+    motoboyCompletedAt: row.motoboy_completed_at || null,
+    motoboyCompletedBy: row.motoboy_completed_by || "",
+    adminReport: row.admin_report || "",
+    adminVerifiedAt: row.admin_verified_at || null,
+    adminVerifiedBy: row.admin_verified_by || "",
   };
 }
 
@@ -502,6 +519,13 @@ export async function saveData(data: AppData): Promise<void> {
     total_km: r.totalKm,
     return_to_start: r.returnToStart,
     optimized_at: r.optimizedAt,
+    completion_status: r.completionStatus || "open",
+    motoboy_report: r.motoboyReport || null,
+    motoboy_completed_at: r.motoboyCompletedAt || null,
+    motoboy_completed_by: r.motoboyCompletedBy || null,
+    admin_report: r.adminReport || null,
+    admin_verified_at: r.adminVerifiedAt || null,
+    admin_verified_by: r.adminVerifiedBy || null,
   }));
 
   const nextDateKeys = new Set(Object.keys(synced.routesByDate));
@@ -523,10 +547,46 @@ export async function saveData(data: AppData): Promise<void> {
 
   if (dateRows.length) {
     let dateUp = await sb.from("date_routes").upsert(dateRows);
+    if (
+      dateUp.error &&
+      /completion_status|motoboy_report|admin_report|column/i.test(
+        dateUp.error.message,
+      )
+    ) {
+      console.warn(
+        "Rode supabase/migration_route_completion.sql para salvar conclusão/relatórios.",
+      );
+      dateUp = await sb.from("date_routes").upsert(
+        dateRows.map(
+          ({
+            completion_status: _c,
+            motoboy_report: _mr,
+            motoboy_completed_at: _mca,
+            motoboy_completed_by: _mcb,
+            admin_report: _ar,
+            admin_verified_at: _ava,
+            admin_verified_by: _avb,
+            ...rest
+          }) => rest,
+        ),
+      );
+    }
     if (dateUp.error && /does not exist|relation|return_to_start/i.test(dateUp.error.message)) {
       if (/return_to_start/i.test(dateUp.error.message)) {
         dateUp = await sb.from("date_routes").upsert(
-          dateRows.map(({ return_to_start: _, ...rest }) => rest),
+          dateRows.map(
+            ({
+              return_to_start: _,
+              completion_status: _c,
+              motoboy_report: _mr,
+              motoboy_completed_at: _mca,
+              motoboy_completed_by: _mcb,
+              admin_report: _ar,
+              admin_verified_at: _ava,
+              admin_verified_by: _avb,
+              ...rest
+            }) => rest,
+          ),
         );
       }
     }

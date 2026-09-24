@@ -106,6 +106,8 @@ export function totalBoxes(stops: { boxes?: number | null }[]): number {
 }
 
 /** Rota de um dia do calendário (chave YYYY-MM-DD). */
+export type RouteCompletionStatus = "open" | "completed" | "verified";
+
 export type DayRoute = {
   date: string;
   startAddress: string;
@@ -116,6 +118,14 @@ export type DayRoute = {
   totalKm: number;
   returnToStart: boolean;
   optimizedAt: string | null;
+  /** open = em andamento; completed = boy concluiu (aguarda admin); verified = admin conferiu */
+  completionStatus?: RouteCompletionStatus;
+  motoboyReport?: string;
+  motoboyCompletedAt?: string | null;
+  motoboyCompletedBy?: string;
+  adminReport?: string;
+  adminVerifiedAt?: string | null;
+  adminVerifiedBy?: string;
 };
 
 export type FinanceStatus = "open" | "paid";
@@ -165,6 +175,13 @@ export function emptyRoute(date: string): DayRoute {
     totalKm: 0,
     returnToStart: false,
     optimizedAt: null,
+    completionStatus: "open",
+    motoboyReport: "",
+    motoboyCompletedAt: null,
+    motoboyCompletedBy: "",
+    adminReport: "",
+    adminVerifiedAt: null,
+    adminVerifiedBy: "",
   };
 }
 

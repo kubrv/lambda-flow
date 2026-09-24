@@ -94,7 +94,12 @@ export function AdminShell({
             onMonthChange={onMonthChange}
             onSelectDate={onSelectDate}
           />
-          <RouteEditor data={data} date={date} onChange={onChange} />
+          <RouteEditor
+            data={data}
+            date={date}
+            onChange={onChange}
+            actorName={company?.name || "Admin"}
+          />
         </div>
       ) : null}
 
