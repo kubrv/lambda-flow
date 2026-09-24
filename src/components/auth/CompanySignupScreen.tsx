@@ -92,7 +92,8 @@ export function CompanySignupScreen({ onAuthenticated, onBack }: Props) {
         <h2 className="auth-title">Obter um plano para minha empresa</h2>
         <p className="lede">
           Preencha os dados e pague {formatMoneyBRL(PLAN_PRICE_BRL)}/mês para
-          liberar o painel. Motoboys entram depois com o código que você gerar.
+          liberar o painel. Motoboys entram depois com o 1º acesso que você gerar
+          (código + eles criam a senha).
         </p>
         <button type="button" className="btn ghost" onClick={onBack}>
           ← Voltar

@@ -122,16 +122,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .update({ owner_user_id: userId })
       .eq("id", companyId);
 
+    // Motoboys usam 1º acesso no painel Motoboys — sem códigos de convite.
+    // Código opcional só para equipe admin da empresa.
     const codeSuffix = Math.random().toString(36).slice(2, 8).toUpperCase();
     await sb.from("invite_codes").insert([
-      {
-        company_id: companyId,
-        code: `MOTO-${codeSuffix}`,
-        role: "motoboy",
-        label: "Motoboys",
-        max_uses: 200,
-        active: true,
-      },
       {
         company_id: companyId,
         code: `ADM-${codeSuffix}`,

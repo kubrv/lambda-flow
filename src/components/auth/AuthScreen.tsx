@@ -2,7 +2,6 @@ import { useState } from "react";
 import {
   type AuthRole,
   completeMotoboyFirstAccess,
-  registerWithCode,
   signIn,
   signInWithLogin,
 } from "../../lib/auth";
@@ -13,7 +12,7 @@ type Props = {
   onCreateCompany?: () => void;
 };
 
-type Mode = "login" | "first-access" | "register";
+type Mode = "login" | "first-access";
 
 export function AuthScreen({
   onAuthenticated,
@@ -22,46 +21,29 @@ export function AuthScreen({
 }: Props) {
   const [role, setRole] = useState<AuthRole>("motoboy");
   const [mode, setMode] = useState<Mode>("login");
-  const [fullName, setFullName] = useState("");
   const [login, setLogin] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [accessCode, setAccessCode] = useState("");
-  const [inviteCode, setInviteCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [okMsg, setOkMsg] = useState("");
 
   function switchRole(next: AuthRole) {
     setRole(next);
     setError("");
-    setOkMsg("");
-    if (next === "company" && mode === "first-access") {
-      setMode("login");
-    }
+    if (next === "company") setMode("login");
   }
 
   async function submit() {
     setError("");
-    setOkMsg("");
     setBusy(true);
     try {
-      if (mode === "login") {
-        const id = role === "motoboy" ? login.trim() : email.trim();
-        if (!id) throw new Error("Informe usuário ou e-mail.");
-        if (role === "motoboy") {
-          await signInWithLogin(id, password);
-        } else {
-          await signIn(id, password);
-        }
-        onAuthenticated();
-        return;
-      }
-
-      if (mode === "first-access") {
+      if (mode === "first-access" && role === "motoboy") {
         if (!login.trim()) throw new Error("Informe usuário ou e-mail.");
         if (!accessCode.trim()) throw new Error("Informe o código de 1º acesso.");
-        if (password.length < 6) throw new Error("Senha com no mínimo 6 caracteres.");
+        if (password.length < 6) {
+          throw new Error("Senha com no mínimo 6 caracteres.");
+        }
         const result = await completeMotoboyFirstAccess({
           login: login.trim(),
           accessCode: accessCode.trim(),
@@ -73,19 +55,13 @@ export function AuthScreen({
         return;
       }
 
-      if (!fullName.trim()) throw new Error("Informe o nome.");
-      if (!inviteCode.trim()) throw new Error("Informe o código da empresa.");
-      await registerWithCode({
-        role,
-        fullName: fullName.trim(),
-        email: email.trim(),
-        password,
-        inviteCode: inviteCode.trim(),
-      });
-      try {
-        await signIn(email.trim(), password);
-      } catch {
-        // ok se já logado
+      const id = role === "motoboy" ? login.trim() : email.trim();
+      if (!id) throw new Error("Informe usuário ou e-mail.");
+      if (!password) throw new Error("Informe a senha.");
+      if (role === "motoboy") {
+        await signInWithLogin(id, password);
+      } else {
+        await signIn(id, password);
       }
       onAuthenticated();
     } catch (err) {
@@ -96,11 +72,9 @@ export function AuthScreen({
   }
 
   const loginReady =
-    mode === "login"
-      ? Boolean((role === "motoboy" ? login : email).trim() && password)
-      : mode === "first-access"
-        ? Boolean(login.trim() && accessCode.trim() && password.length >= 6)
-        : Boolean(email.trim() && password && fullName.trim() && inviteCode.trim());
+    mode === "first-access"
+      ? Boolean(login.trim() && accessCode.trim() && password.length >= 6)
+      : Boolean((role === "motoboy" ? login : email).trim() && password);
 
   return (
     <div className="auth-screen">
@@ -121,8 +95,8 @@ export function AuthScreen({
           />
         </div>
         <p className="lede">
-          Motoboy: entre com usuário ou e-mail. No primeiro acesso, use o código
-          que a empresa passou e crie sua senha. Empresa: e-mail e senha.
+          Motoboy: no 1º acesso use o código da empresa e crie sua senha. Depois
+          entre com usuário ou e-mail. Empresa: e-mail e senha.
         </p>
         {onBack ? (
           <button type="button" className="btn ghost" onClick={onBack}>
@@ -145,7 +119,7 @@ export function AuthScreen({
               </svg>
             </span>
             <strong>Motoboy</strong>
-            <small>Usuário · e-mail · senha</small>
+            <small>1º acesso · usuário · senha</small>
           </button>
           <button
             type="button"
@@ -165,90 +139,52 @@ export function AuthScreen({
           </button>
         </div>
 
-        <div className="mode-tabs compact">
-          <button
-            type="button"
-            className={`mode-tab${mode === "login" ? " active" : ""}`}
-            onClick={() => {
-              setMode("login");
-              setError("");
-              setOkMsg("");
-            }}
-          >
-            Entrar
-          </button>
-          {role === "motoboy" ? (
+        {role === "motoboy" ? (
+          <div className="mode-tabs compact">
+            <button
+              type="button"
+              className={`mode-tab${mode === "login" ? " active" : ""}`}
+              onClick={() => {
+                setMode("login");
+                setError("");
+              }}
+            >
+              Entrar
+            </button>
             <button
               type="button"
               className={`mode-tab${mode === "first-access" ? " active" : ""}`}
               onClick={() => {
                 setMode("first-access");
                 setError("");
-                setOkMsg("");
               }}
             >
               1º acesso
             </button>
-          ) : null}
-          <button
-            type="button"
-            className={`mode-tab${mode === "register" ? " active" : ""}`}
-            onClick={() => {
-              setMode("register");
-              setError("");
-              setOkMsg("");
-            }}
-          >
-            Cadastrar com código
-          </button>
-        </div>
+          </div>
+        ) : null}
 
         <div className="form-grid">
-          {mode === "register" ? (
-            <div className="field">
-              <label>Nome</label>
-              <input
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-                placeholder="Seu nome"
-                autoComplete="name"
-              />
-            </div>
-          ) : null}
+          <div className="field">
+            <label>
+              {role === "motoboy" ? "Usuário ou e-mail" : "E-mail"}
+            </label>
+            <input
+              type={role === "company" ? "email" : "text"}
+              value={role === "motoboy" ? login : email}
+              onChange={(e) =>
+                role === "motoboy"
+                  ? setLogin(e.target.value)
+                  : setEmail(e.target.value)
+              }
+              placeholder={
+                role === "motoboy" ? "usuario ou seu@email.com" : "seu@email.com"
+              }
+              autoComplete={role === "motoboy" ? "username" : "email"}
+            />
+          </div>
 
-          {mode === "login" || mode === "first-access" ? (
-            <div className="field">
-              <label>
-                {role === "motoboy" ? "Usuário ou e-mail" : "E-mail"}
-              </label>
-              <input
-                type={role === "company" ? "email" : "text"}
-                value={role === "motoboy" ? login : email}
-                onChange={(e) =>
-                  role === "motoboy"
-                    ? setLogin(e.target.value)
-                    : setEmail(e.target.value)
-                }
-                placeholder={
-                  role === "motoboy" ? "usuario ou seu@email.com" : "seu@email.com"
-                }
-                autoComplete={role === "motoboy" ? "username" : "email"}
-              />
-            </div>
-          ) : (
-            <div className="field">
-              <label>E-mail</label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="seu@email.com"
-                autoComplete="email"
-              />
-            </div>
-          )}
-
-          {mode === "first-access" ? (
+          {mode === "first-access" && role === "motoboy" ? (
             <div className="field">
               <label>Código de 1º acesso</label>
               <input
@@ -258,14 +194,17 @@ export function AuthScreen({
                 autoComplete="one-time-code"
               />
               <p className="hint">
-                Só você cria a senha. A empresa não vê a senha depois.
+                Só você cria a senha. A empresa pode alterar depois, mas nunca vê
+                a senha.
               </p>
             </div>
           ) : null}
 
           <div className="field">
             <label>
-              {mode === "first-access" ? "Criar senha" : "Senha"}
+              {mode === "first-access" && role === "motoboy"
+                ? "Criar senha"
+                : "Senha"}
             </label>
             <input
               type="password"
@@ -278,19 +217,6 @@ export function AuthScreen({
             />
           </div>
 
-          {mode === "register" ? (
-            <div className="field">
-              <label>Código da empresa</label>
-              <input
-                value={inviteCode}
-                onChange={(e) => setInviteCode(e.target.value.toUpperCase())}
-                placeholder="Código recebido"
-                autoComplete="off"
-              />
-              <p className="hint">Peça ao administrador da sua empresa.</p>
-            </div>
-          ) : null}
-
           <button
             type="button"
             className="btn primary"
@@ -299,15 +225,12 @@ export function AuthScreen({
           >
             {busy
               ? "Aguarde…"
-              : mode === "login"
-                ? `Entrar como ${role === "company" ? "empresa" : "motoboy"}`
-                : mode === "first-access"
-                  ? "Criar senha e entrar"
-                  : "Criar conta"}
+              : mode === "first-access" && role === "motoboy"
+                ? "Criar senha e entrar"
+                : `Entrar como ${role === "company" ? "empresa" : "motoboy"}`}
           </button>
 
           {error ? <div className="status err">{error}</div> : null}
-          {okMsg ? <div className="status ok">{okMsg}</div> : null}
 
           {onCreateCompany ? (
             <button type="button" className="btn" onClick={onCreateCompany}>

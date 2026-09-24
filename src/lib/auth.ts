@@ -131,6 +131,13 @@ export async function adminSetMotoboyPassword(
   });
 }
 
+/** Zera e-mails/usuários/senhas de todos os motoboys (mantém só o nome). */
+export async function resetAllMotoboyLogins() {
+  return callMotoboyAccount({
+    action: "reset-all-logins",
+  });
+}
+
 export function companyHasActivePlan(company: Company | null): boolean {
   if (!company) return false;
   if (company.planStatus === "active" || company.planStatus === "trial") {
@@ -211,6 +218,11 @@ export async function registerWithCode(input: {
   password: string;
   inviteCode: string;
 }): Promise<{ user: User }> {
+  if (input.role === "motoboy") {
+    throw new Error(
+      "Motoboys não usam código de convite. Peça o 1º acesso à empresa.",
+    );
+  }
   const invite = await lookupInviteCode(input.inviteCode);
   if (!invite) throw new Error("Código inválido ou inativo.");
   if (invite.role !== input.role) {

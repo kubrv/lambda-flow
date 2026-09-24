@@ -332,7 +332,7 @@ export function LandingPage({ onLogin, onCreateCompany }: Props) {
           <article className="flow-card">
             <span className="flow-num">1</span>
             <strong>Empresa no painel</strong>
-            <p>Endereços, motoboys e códigos de acesso.</p>
+            <p>Endereços, motoboys e 1º acesso com senha.</p>
             <div className="flow-mini">
               <MockEndereco />
             </div>
@@ -362,8 +362,8 @@ export function LandingPage({ onLogin, onCreateCompany }: Props) {
           <div>
             <h2>Plano Empresa</h2>
             <p className="landing-section-lead">
-              Um plano só. A empresa paga — o motoboy entra de graça com o
-              código.
+              Um plano só. A empresa paga — o motoboy entra de graça no 1º
+              acesso.
             </p>
             <p className="landing-plan-price">
               {formatMoneyBRL(PLAN_PRICE_BRL)}
@@ -387,7 +387,7 @@ export function LandingPage({ onLogin, onCreateCompany }: Props) {
               "Painel administrador completo",
               "Rotas do mês otimizadas",
               "Valor/km por motoboy",
-              "Códigos de acesso",
+              "1º acesso do motoboy",
               "Financeiro + PDF",
               "Maps, Waze e PDF clicável",
             ].map((item) => (

@@ -210,6 +210,70 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
+    if (action === "reset-all-logins") {
+      const { data: motos, error: listErr } = await sb
+        .from("motoboys")
+        .select("id, user_id, email, username, name");
+      if (listErr) throw listErr;
+
+      const deletedUsers: string[] = [];
+      for (const m of motos || []) {
+        const uid = m.user_id as string | null;
+        if (uid) {
+          const del = await sb.auth.admin.deleteUser(uid);
+          if (!del.error) deletedUsers.push(uid);
+        }
+      }
+
+      // Perfis de motoboy (mesmo sem user_id na tabela motoboys)
+      const { data: motoProfiles } = await sb
+        .from("profiles")
+        .select("user_id")
+        .eq("role", "motoboy");
+      for (const p of motoProfiles || []) {
+        const uid = String(p.user_id);
+        if (!deletedUsers.includes(uid)) {
+          await sb.auth.admin.deleteUser(uid);
+          deletedUsers.push(uid);
+        }
+      }
+      await sb.from("profiles").delete().eq("role", "motoboy");
+
+      const clear = await sb
+        .from("motoboys")
+        .update({
+          email: null,
+          username: null,
+          user_id: null,
+          password_set: false,
+          access_code_hash: null,
+          access_code_expires_at: null,
+        })
+        .neq("id", "00000000-0000-0000-0000-000000000000");
+      if (clear.error && /column|email|username/i.test(clear.error.message)) {
+        return res.status(500).json({
+          ok: false,
+          error:
+            "Rode supabase/migration_motoboy_accounts.sql antes de zerar acessos.",
+          detail: clear.error.message,
+        });
+      }
+      if (clear.error) throw clear.error;
+
+      await sb
+        .from("invite_codes")
+        .update({ active: false })
+        .eq("role", "motoboy");
+
+      return res.status(200).json({
+        ok: true,
+        cleared: (motos || []).length,
+        deletedAuthUsers: deletedUsers.length,
+        message:
+          "Acessos de motoboy zerados. Ficaram só os nomes — cadastre e-mail/usuário e gere o 1º acesso.",
+      });
+    }
+
     // provision / regenerate access code
     const motoboyId = String(body.motoboyId || "");
     const name = String(body.name || "").trim();

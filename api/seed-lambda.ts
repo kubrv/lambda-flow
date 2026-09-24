@@ -49,14 +49,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       [
         {
           company_id: LAMBDA_COMPANY_ID,
-          code: "LAMBDA-MOTO-2026",
-          role: "motoboy",
-          label: "Motoboys Lambda",
-          max_uses: 500,
-          active: true,
-        },
-        {
-          company_id: LAMBDA_COMPANY_ID,
           code: "LAMBDA-ADMIN-2026",
           role: "company",
           label: "Equipe admin Lambda",
@@ -66,6 +58,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       ],
       { onConflict: "code" },
     );
+    // Motoboys não usam mais código de convite — desativa legado
+    await sb
+      .from("invite_codes")
+      .update({ active: false })
+      .eq("role", "motoboy");
 
     // Cria / atualiza usuário
     const { data: listed } = await sb.auth.admin.listUsers({ perPage: 200 });

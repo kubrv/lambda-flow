@@ -2,6 +2,7 @@ import { useState } from "react";
 import {
   adminSetMotoboyPassword,
   provisionMotoboyAccount,
+  resetAllMotoboyLogins,
 } from "../../lib/auth";
 import { motoboyFinanceSummary } from "../../lib/finance";
 import { formatMoneyBRL } from "../../lib/labels";
@@ -226,6 +227,42 @@ export function MotoboysAdmin({ data, onChange }: Props) {
     }
   }
 
+  async function wipeLogins() {
+    setErr("");
+    setMsg("");
+    if (
+      !window.confirm(
+        "Isso apaga e-mail, usuário e senha de TODOS os motoboys (fica só o nome). Continuar?",
+      )
+    ) {
+      return;
+    }
+    setBusyId("__reset__");
+    try {
+      const result = await resetAllMotoboyLogins();
+      const cleared = data.motoboys.map((m) => ({
+        ...m,
+        email: undefined,
+        username: undefined,
+        userId: undefined,
+        passwordSet: false,
+      }));
+      onChange({ ...data, motoboys: cleared });
+      setAccessCodes({});
+      setResetPwd({});
+      setMsg(
+        String(
+          result.message ||
+            "Acessos zerados. Cadastre e-mail/usuário e gere o 1º acesso.",
+        ),
+      );
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Falha ao zerar acessos.");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   function remove(id: string) {
     const routesByDate = { ...data.routesByDate };
     for (const [key, route] of Object.entries(routesByDate)) {
@@ -372,10 +409,22 @@ export function MotoboysAdmin({ data, onChange }: Props) {
     <section className="panel">
       <h2>Cadastro de motoboys</h2>
       <p className="lede">
-        A empresa cadastra nome, telefone, e-mail e usuário. Só o motoboy cria a
-        senha no 1º acesso. Você pode redefinir a senha depois (sem visualizá-la).
-        Preferência de pagamento padrão: no fim da rota.
+        Cadastre nome, telefone, e-mail e usuário. Gere o <strong>1º acesso</strong>{" "}
+        (código) — só o motoboy cria a senha. Depois você pode alterar a senha
+        (sem visualizá-la). Preferência de pagamento padrão: no fim da rota.
       </p>
+      <div className="row-actions" style={{ marginBottom: "0.75rem" }}>
+        <button
+          type="button"
+          className="btn danger ghost"
+          disabled={busyId === "__reset__"}
+          onClick={() => void wipeLogins()}
+        >
+          {busyId === "__reset__"
+            ? "Zerando…"
+            : "Zerar e-mails e acessos (reiniciar login)"}
+        </button>
+      </div>
 
       <div className="form-grid">
         {profileFields(draft, setDraft, "m")}

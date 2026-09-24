@@ -1,7 +1,6 @@
 import { MonthCalendar } from "./MonthCalendar";
 import { AddressesAdmin } from "./admin/AddressesAdmin";
 import { FinanceAdmin } from "./admin/FinanceAdmin";
-import { InviteCodesAdmin } from "./admin/InviteCodesAdmin";
 import { MotoboysAdmin } from "./admin/MotoboysAdmin";
 import { RouteEditor } from "./admin/RouteEditor";
 import { ValuesAdmin } from "./admin/ValuesAdmin";
@@ -13,7 +12,6 @@ export type AdminTab =
   | "rotas"
   | "enderecos"
   | "motoboys"
-  | "codigos"
   | "valores"
   | "financeiro"
   | "plano";
@@ -37,7 +35,6 @@ const TABS: { id: AdminTab; label: string }[] = [
   { id: "rotas", label: "Rotas do mês" },
   { id: "enderecos", label: "Endereços" },
   { id: "motoboys", label: "Motoboys" },
-  { id: "codigos", label: "Códigos" },
   { id: "valores", label: "Partida" },
   { id: "financeiro", label: "Financeiro" },
   { id: "plano", label: "Plano" },
@@ -108,9 +105,6 @@ export function AdminShell({
       ) : null}
       {tab === "motoboys" ? (
         <MotoboysAdmin data={data} onChange={onChange} />
-      ) : null}
-      {tab === "codigos" && company ? (
-        <InviteCodesAdmin companyId={company.id} />
       ) : null}
       {tab === "valores" ? (
         <ValuesAdmin data={data} onChange={onChange} />
