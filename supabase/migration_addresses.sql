@@ -16,8 +16,7 @@ create table if not exists public.addresses (
   created_at timestamptz not null default now()
 );
 
-create unique index if not exists addresses_address_unique
-  on public.addresses (lower(trim(address)));
+drop index if exists public.addresses_address_unique;
 
 alter table public.addresses enable row level security;
 

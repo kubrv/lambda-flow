@@ -465,7 +465,78 @@ export async function loadData(): Promise<AppData> {
     seeded.coordCache[row.address_key] = { lat: row.lat, lng: row.lng };
   }
 
-  return syncCatalogFromRoutes(seeded);
+  const withCatalog = syncCatalogFromRoutes(seeded);
+
+  // Se rotas tinham paradas que não estavam no catálogo (ex.: tabela recriada
+  // vazia), grava de volta sem apagar nada — recuperação automática.
+  const recovered = withCatalog.addresses.filter(
+    (a) => !seeded.addresses.some((b) => b.id === a.id),
+  );
+  if (recovered.length) {
+    try {
+      await upsertAddressesOnly(recovered);
+    } catch (err) {
+      console.warn(
+        "Recuperação de endereços a partir das rotas falhou:",
+        err instanceof Error ? err.message : err,
+      );
+    }
+  }
+
+  return withCatalog;
+}
+
+async function upsertAddressesOnly(addresses: SavedAddress[]): Promise<void> {
+  if (!addresses.length) return;
+  const sb = getSupabase();
+  const rows = addresses.map((a) => ({
+    id: a.id,
+    label: a.label,
+    address: a.address,
+    complement: a.complement?.trim() || "",
+    hours: normalizeHoursPeriods(a.hours),
+    lat: a.lat,
+    lng: a.lng,
+    active: a.active !== false,
+  }));
+  let up = await sb.from("addresses").upsert(rows);
+  if (up.error && /active|complement|hours|column/i.test(up.error.message)) {
+    up = await sb.from("addresses").upsert(
+      rows.map(({ active: _a, complement, hours, ...rest }) => ({
+        ...rest,
+        complement,
+        hours,
+      })),
+    );
+  }
+  if (up.error && /complement|hours|column/i.test(up.error.message)) {
+    up = await sb.from("addresses").upsert(
+      rows.map(({ id, label, address, lat, lng }) => ({
+        id,
+        label,
+        address,
+        lat,
+        lng,
+      })),
+    );
+  }
+  if (up.error && /duplicate|unique|addresses_address/i.test(up.error.message)) {
+    // Índice único antigo: tenta um a um para não perder o lote inteiro
+    for (const row of rows) {
+      const one = await sb.from("addresses").upsert({
+        id: row.id,
+        label: row.label,
+        address: row.address,
+        lat: row.lat,
+        lng: row.lng,
+      });
+      if (one.error && !/duplicate|unique/i.test(one.error.message)) {
+        console.warn("address upsert:", one.error.message, row.address);
+      }
+    }
+    return;
+  }
+  if (up.error) throw new Error(up.error.message);
 }
 
 /** Remoção explícita — nunca apagar por “sumiu do estado do browser”. */
@@ -558,57 +629,10 @@ export async function saveData(data: AppData): Promise<void> {
   }
 
   if (synced.addresses.length) {
-    const addrUp = await sb.from("addresses").upsert(
-      synced.addresses.map((a) => ({
-        id: a.id,
-        label: a.label,
-        address: a.address,
-        complement: a.complement?.trim() || "",
-        hours: normalizeHoursPeriods(a.hours),
-        lat: a.lat,
-        lng: a.lng,
-        active: a.active !== false,
-      })),
-    );
-    if (addrUp.error) {
-      // Colunas novas ainda não migradas: salva o básico (sem apagar nada)
-      if (/active|complement|hours|column/i.test(addrUp.error.message)) {
-        if (/active/i.test(addrUp.error.message)) {
-          console.warn(
-            "Rode supabase/migration_address_active.sql para inativar endereços.",
-          );
-        }
-        const fallback = await sb.from("addresses").upsert(
-          synced.addresses.map((a) => ({
-            id: a.id,
-            label: a.label,
-            address: a.address,
-            complement: a.complement?.trim() || "",
-            hours: normalizeHoursPeriods(a.hours),
-            lat: a.lat,
-            lng: a.lng,
-          })),
-        );
-        if (fallback.error && /complement|hours|column/i.test(fallback.error.message)) {
-          const basic = await sb.from("addresses").upsert(
-            synced.addresses.map((a) => ({
-              id: a.id,
-              label: a.label,
-              address: a.address,
-              lat: a.lat,
-              lng: a.lng,
-            })),
-          );
-          if (basic.error) throw new Error(basic.error.message);
-          console.warn(
-            "Rode supabase/migration_address_complement_hours.sql para salvar complemento/horário.",
-          );
-        } else if (fallback.error) {
-          throw new Error(fallback.error.message);
-        }
-      } else {
-        throw new Error(addrUp.error.message);
-      }
+    try {
+      await upsertAddressesOnly(synced.addresses);
+    } catch (e) {
+      throw e instanceof Error ? e : new Error(String(e));
     }
   }
 

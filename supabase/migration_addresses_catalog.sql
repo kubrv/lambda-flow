@@ -28,8 +28,8 @@ alter table public.addresses
 alter table public.addresses
   add column if not exists active boolean not null default true;
 
-create unique index if not exists addresses_address_unique
-  on public.addresses (lower(trim(address)));
+-- Não use índice único por texto: apelidos/variações e upsert em lote quebram.
+drop index if exists public.addresses_address_unique;
 
 alter table public.addresses enable row level security;
 
