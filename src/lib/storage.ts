@@ -152,9 +152,16 @@ function blankData(): AppData {
 }
 
 export function syncCatalogFromRoutes(data: AppData): AppData {
-  const byKey = new Map(
-    data.addresses.map((a) => [normalizeAddress(a.address), a]),
+  // Preserva TODOS os endereços por id (nunca colapsa/descarta por texto
+  // normalizado — isso apagava cadastros “parecidos” no save).
+  const byId = new Map(
+    data.addresses.map((a) => [a.id, { ...a } as SavedAddress]),
   );
+  const normToId = new Map<string, string>();
+  for (const a of byId.values()) {
+    const key = normalizeAddress(a.address);
+    if (key && !normToId.has(key)) normToId.set(key, a.id);
+  }
 
   const allStops = [
     ...Object.values(data.routesByDate).flatMap((r) => r.stops),
@@ -164,8 +171,11 @@ export function syncCatalogFromRoutes(data: AppData): AppData {
   for (const stop of allStops) {
     const key = normalizeAddress(stop.address);
     if (!key) continue;
-    const existing = byKey.get(key);
-    if (existing) {
+    const existingId =
+      (stop.addressId && byId.has(stop.addressId) ? stop.addressId : null) ||
+      normToId.get(key);
+    if (existingId) {
+      const existing = byId.get(existingId)!;
       if (stop.lat != null && stop.lng != null) {
         existing.lat = stop.lat;
         existing.lng = stop.lng;
@@ -181,8 +191,9 @@ export function syncCatalogFromRoutes(data: AppData): AppData {
       }
       continue;
     }
+    const id = stop.addressId || createId();
     const saved: SavedAddress = {
-      id: stop.addressId || createId(),
+      id,
       label: cleanNickname(stop.label, stop.address),
       address: stop.address,
       complement: stop.complement?.trim() || "",
@@ -191,11 +202,14 @@ export function syncCatalogFromRoutes(data: AppData): AppData {
         : cloneDefaultHours(),
       lat: stop.lat,
       lng: stop.lng,
+      active: true,
+      createdAt: new Date().toISOString(),
     };
-    byKey.set(key, saved);
+    byId.set(id, saved);
+    normToId.set(key, id);
   }
 
-  return { ...data, addresses: [...byKey.values()] };
+  return { ...data, addresses: [...byId.values()] };
 }
 
 export function upsertSavedAddress(
@@ -360,24 +374,27 @@ export async function loadData(): Promise<AppData> {
       createdAt: row.created_at || undefined,
     }));
   } else if (addressesRes.error) {
-    // Fallback se select * falhar por outro motivo / tabela antiga
+    // Fallback se select * falhar por coluna nova / tabela antiga
     const legacyAddr = await sb
       .from("addresses")
-      .select("id,label,address,lat,lng")
+      .select("id,label,address,lat,lng,created_at")
       .order("created_at");
-    if (!legacyAddr.error && legacyAddr.data) {
-      data.addresses = (legacyAddr.data as AddressRow[]).map((row) => ({
-        id: row.id,
-        label: row.label || row.address.split(",")[0].trim(),
-        address: row.address,
-        complement: "",
-        hours: cloneDefaultHours(),
-        lat: row.lat,
-        lng: row.lng,
-        active: true,
-        createdAt: row.created_at || undefined,
-      }));
+    if (legacyAddr.error) {
+      throw new Error(
+        `Falha ao carregar endereços: ${addressesRes.error.message}`,
+      );
     }
+    data.addresses = (legacyAddr.data as AddressRow[]).map((row) => ({
+      id: row.id,
+      label: row.label || row.address.split(",")[0].trim(),
+      address: row.address,
+      complement: "",
+      hours: cloneDefaultHours(),
+      lat: row.lat,
+      lng: row.lng,
+      active: true,
+      createdAt: row.created_at || undefined,
+    }));
   }
 
   const legacy: Partial<Record<Weekday, DayRoute>> = {};
@@ -446,21 +463,41 @@ export async function loadData(): Promise<AppData> {
   return syncCatalogFromRoutes(seeded);
 }
 
+/** Remoção explícita — nunca apagar por “sumiu do estado do browser”. */
+export async function deleteSavedAddress(id: string): Promise<void> {
+  const sb = getSupabase();
+  const { error } = await sb.from("addresses").delete().eq("id", id);
+  if (error) throw new Error(error.message);
+}
+
+export async function deleteMotoboyRow(id: string): Promise<void> {
+  const sb = getSupabase();
+  const { error } = await sb.from("motoboys").delete().eq("id", id);
+  if (error) throw new Error(error.message);
+}
+
+export async function deleteFinanceRows(ids: string[]): Promise<void> {
+  if (!ids.length) return;
+  const sb = getSupabase();
+  const { error } = await sb.from("finance_entries").delete().in("id", ids);
+  if (error) throw new Error(error.message);
+}
+
+export async function deleteDateRoute(routeDate: string): Promise<void> {
+  const sb = getSupabase();
+  const { error } = await sb
+    .from("date_routes")
+    .delete()
+    .eq("route_date", routeDate);
+  if (error) throw new Error(error.message);
+}
+
 export async function saveData(data: AppData): Promise<void> {
   const sb = getSupabase();
   const synced = syncCatalogFromRoutes(data);
 
-  const existing = await sb.from("motoboys").select("id");
-  if (existing.error) throw new Error(existing.error.message);
-  const existingIds = new Set((existing.data || []).map((m) => m.id as string));
-  const nextIds = new Set(synced.motoboys.map((m) => m.id));
-
-  const toDelete = [...existingIds].filter((id) => !nextIds.has(id));
-  if (toDelete.length) {
-    const del = await sb.from("motoboys").delete().in("id", toDelete);
-    if (del.error) throw new Error(del.error.message);
-  }
-
+  // Upsert-only: NÃO apagar linhas ausentes no cliente.
+  // Deploy / aba antiga / carga parcial não podem limpar o banco.
   if (synced.motoboys.length) {
     const fullRows = synced.motoboys.map((m) => ({
       id: m.id,
@@ -515,70 +552,57 @@ export async function saveData(data: AppData): Promise<void> {
     }
   }
 
-  const addrExisting = await sb.from("addresses").select("id");
-  if (addrExisting.error) {
-    console.warn("addresses table unavailable:", addrExisting.error.message);
-  } else {
-    const existingAddr = new Set(
-      (addrExisting.data || []).map((a) => a.id as string),
+  if (synced.addresses.length) {
+    const addrUp = await sb.from("addresses").upsert(
+      synced.addresses.map((a) => ({
+        id: a.id,
+        label: a.label,
+        address: a.address,
+        complement: a.complement?.trim() || "",
+        hours: normalizeHoursPeriods(a.hours),
+        lat: a.lat,
+        lng: a.lng,
+        active: a.active !== false,
+      })),
     );
-    const nextAddr = new Set(synced.addresses.map((a) => a.id));
-    const delAddr = [...existingAddr].filter((id) => !nextAddr.has(id));
-    if (delAddr.length) {
-      await sb.from("addresses").delete().in("id", delAddr);
-    }
-    if (synced.addresses.length) {
-      const addrUp = await sb.from("addresses").upsert(
-        synced.addresses.map((a) => ({
-          id: a.id,
-          label: a.label,
-          address: a.address,
-          complement: a.complement?.trim() || "",
-          hours: normalizeHoursPeriods(a.hours),
-          lat: a.lat,
-          lng: a.lng,
-          active: a.active !== false,
-        })),
-      );
-      if (addrUp.error) {
-        // Colunas novas ainda não migradas: salva o básico
-        if (/active|complement|hours|column/i.test(addrUp.error.message)) {
-          if (/active/i.test(addrUp.error.message)) {
-            console.warn(
-              "Rode supabase/migration_address_active.sql para inativar endereços.",
-            );
-          }
-          const fallback = await sb.from("addresses").upsert(
+    if (addrUp.error) {
+      // Colunas novas ainda não migradas: salva o básico (sem apagar nada)
+      if (/active|complement|hours|column/i.test(addrUp.error.message)) {
+        if (/active/i.test(addrUp.error.message)) {
+          console.warn(
+            "Rode supabase/migration_address_active.sql para inativar endereços.",
+          );
+        }
+        const fallback = await sb.from("addresses").upsert(
+          synced.addresses.map((a) => ({
+            id: a.id,
+            label: a.label,
+            address: a.address,
+            complement: a.complement?.trim() || "",
+            hours: normalizeHoursPeriods(a.hours),
+            lat: a.lat,
+            lng: a.lng,
+          })),
+        );
+        if (fallback.error && /complement|hours|column/i.test(fallback.error.message)) {
+          const basic = await sb.from("addresses").upsert(
             synced.addresses.map((a) => ({
               id: a.id,
               label: a.label,
               address: a.address,
-              complement: a.complement?.trim() || "",
-              hours: normalizeHoursPeriods(a.hours),
               lat: a.lat,
               lng: a.lng,
             })),
           );
-          if (fallback.error && /complement|hours|column/i.test(fallback.error.message)) {
-            const basic = await sb.from("addresses").upsert(
-              synced.addresses.map((a) => ({
-                id: a.id,
-                label: a.label,
-                address: a.address,
-                lat: a.lat,
-                lng: a.lng,
-              })),
-            );
-            if (basic.error) throw new Error(basic.error.message);
-            console.warn(
-              "Rode supabase/migration_address_complement_hours.sql para salvar complemento/horário.",
-            );
-          } else if (fallback.error) {
-            throw new Error(fallback.error.message);
-          }
-        } else {
-          throw new Error(addrUp.error.message);
+          if (basic.error) throw new Error(basic.error.message);
+          console.warn(
+            "Rode supabase/migration_address_complement_hours.sql para salvar complemento/horário.",
+          );
+        } else if (fallback.error) {
+          throw new Error(fallback.error.message);
         }
+      } else {
+        throw new Error(addrUp.error.message);
       }
     }
   }
@@ -602,23 +626,7 @@ export async function saveData(data: AppData): Promise<void> {
     admin_verified_by: r.adminVerifiedBy || null,
   }));
 
-  const nextDateKeys = new Set(Object.keys(synced.routesByDate));
-  const existingDatesRes = await sb.from("date_routes").select("route_date");
-  if (!existingDatesRes.error) {
-    const toDeleteDates = (existingDatesRes.data || [])
-      .map((row) => String(row.route_date).slice(0, 10))
-      .filter((key) => key && !nextDateKeys.has(key));
-    if (toDeleteDates.length) {
-      const delDates = await sb
-        .from("date_routes")
-        .delete()
-        .in("route_date", toDeleteDates);
-      if (delDates.error) throw new Error(delDates.error.message);
-    }
-  } else if (!/does not exist|relation/i.test(existingDatesRes.error.message)) {
-    console.warn("date_routes list:", existingDatesRes.error.message);
-  }
-
+  // Rotas: só upsert. Limpar um dia chama deleteDateRoute() explicitamente.
   if (dateRows.length) {
     let dateUp = await sb.from("date_routes").upsert(dateRows);
     if (
@@ -722,54 +730,43 @@ export async function saveData(data: AppData): Promise<void> {
     console.warn("app_settings save:", settingsUp.error.message);
   }
 
-  const finExisting = await sb.from("finance_entries").select("id");
-  if (!finExisting.error) {
-    const existingFin = new Set(
-      (finExisting.data || []).map((f) => f.id as string),
-    );
-    const nextFin = new Set(synced.finance.map((f) => f.id));
-    const delFin = [...existingFin].filter((id) => !nextFin.has(id));
-    if (delFin.length) {
-      await sb.from("finance_entries").delete().in("id", delFin);
+  if (synced.finance.length) {
+    const rows = synced.finance.map((f) => ({
+      id: f.id,
+      motoboy_id: f.motoboyId,
+      amount: f.amount,
+      route_dates: f.routeDates,
+      description: f.description ?? null,
+      status: f.status,
+      created_at: f.createdAt,
+      source: f.source ?? "manual",
+      km: f.km ?? null,
+      payment_method: f.paymentMethod ?? null,
+      paid_at: f.paidAt ?? null,
+    }));
+    let finUp = await sb.from("finance_entries").upsert(rows);
+    if (finUp.error && /payment_method|paid_at|column/i.test(finUp.error.message)) {
+      finUp = await sb.from("finance_entries").upsert(
+        rows.map(({ payment_method: _p, paid_at: _a, ...rest }) => rest),
+      );
+      console.warn(
+        "Rode supabase/migration_motoboy_accounts.sql para formas de pagamento.",
+      );
     }
-    if (synced.finance.length) {
-      const rows = synced.finance.map((f) => ({
-        id: f.id,
-        motoboy_id: f.motoboyId,
-        amount: f.amount,
-        route_dates: f.routeDates,
-        description: f.description ?? null,
-        status: f.status,
-        created_at: f.createdAt,
-        source: f.source ?? "manual",
-        km: f.km ?? null,
-        payment_method: f.paymentMethod ?? null,
-        paid_at: f.paidAt ?? null,
-      }));
-      let finUp = await sb.from("finance_entries").upsert(rows);
-      if (finUp.error && /payment_method|paid_at|column/i.test(finUp.error.message)) {
-        finUp = await sb.from("finance_entries").upsert(
-          rows.map(({ payment_method: _p, paid_at: _a, ...rest }) => rest),
-        );
-        console.warn(
-          "Rode supabase/migration_motoboy_accounts.sql para formas de pagamento.",
-        );
-      }
-      if (finUp.error && /source|column|km/i.test(finUp.error.message)) {
-        finUp = await sb.from("finance_entries").upsert(
-          rows.map(
-            ({
-              source: _s,
-              km: _k,
-              payment_method: _p,
-              paid_at: _a,
-              ...rest
-            }) => rest,
-          ),
-        );
-      }
-      if (finUp.error) throw new Error(finUp.error.message);
+    if (finUp.error && /source|column|km/i.test(finUp.error.message)) {
+      finUp = await sb.from("finance_entries").upsert(
+        rows.map(
+          ({
+            source: _s,
+            km: _k,
+            payment_method: _p,
+            paid_at: _a,
+            ...rest
+          }) => rest,
+        ),
+      );
     }
+    if (finUp.error) throw new Error(finUp.error.message);
   }
 
   const cacheRows = Object.entries(synced.coordCache).map(([address_key, v]) => ({

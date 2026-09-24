@@ -21,6 +21,7 @@ import {
 } from "../../lib/payPrefs";
 import { printFinancePdf } from "../../lib/printFinancePdf";
 import { printPeriodFinancePdf } from "../../lib/printMonthlyFinancePdf";
+import { deleteFinanceRows } from "../../lib/storage";
 import type { AppData, FinanceEntry } from "../../lib/types";
 import { createId, getRoute } from "../../lib/types";
 
@@ -150,11 +151,16 @@ export function FinanceAdmin({ data, onChange }: Props) {
     });
   }
 
-  function remove(id: string) {
-    onChange({
-      ...data,
-      finance: data.finance.filter((e) => e.id !== id),
-    });
+  async function remove(id: string) {
+    try {
+      await deleteFinanceRows([id]);
+      onChange({
+        ...data,
+        finance: data.finance.filter((e) => e.id !== id),
+      });
+    } catch (err) {
+      setMsg(err instanceof Error ? err.message : "Falha ao remover lançamento.");
+    }
   }
 
   function handlePdf() {

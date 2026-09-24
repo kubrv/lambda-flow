@@ -2,6 +2,13 @@
 
 Pasta sincronizada com o vault Obsidian (Specs/lambda-flow).
 
+## Persistência (deploy)
+
+- Deploy **não** apaga dados: endereços/rotas/motoboys/financeiro vivem no Supabase.
+- `saveData` só faz **upsert** (não “espelha e apaga” o que falta no browser).
+- Remover endereço/motoboy/lançamento ou limpar rota chama **delete explícito**.
+- Catálogo de endereços preserva todos os IDs (não colapsa por texto igual).
+
 ## Endereços (admin)
 
 - Lista com ordenação: **ordem de adição** ou **alfabética**.

@@ -14,7 +14,7 @@ import {
   type PayDayPreference,
   type PayMethod,
 } from "../../lib/payPrefs";
-import { saveData } from "../../lib/storage";
+import { deleteFinanceRows, deleteMotoboyRow, saveData } from "../../lib/storage";
 import type { AppData, Motoboy } from "../../lib/types";
 import { DEFAULT_PRICE_PER_KM, createId } from "../../lib/types";
 
@@ -267,22 +267,33 @@ export function MotoboysAdmin({ data, onChange }: Props) {
     }
   }
 
-  function remove(id: string) {
-    const routesByDate = { ...data.routesByDate };
-    for (const [key, route] of Object.entries(routesByDate)) {
-      if (route.motoboyId === id) {
-        routesByDate[key] = { ...route, motoboyId: null };
+  async function remove(id: string) {
+    const ok = window.confirm("Remover este motoboy?");
+    if (!ok) return;
+    const finIds = data.finance
+      .filter((f) => f.motoboyId === id)
+      .map((f) => f.id);
+    try {
+      await deleteMotoboyRow(id);
+      if (finIds.length) await deleteFinanceRows(finIds);
+      const routesByDate = { ...data.routesByDate };
+      for (const [key, route] of Object.entries(routesByDate)) {
+        if (route.motoboyId === id) {
+          routesByDate[key] = { ...route, motoboyId: null };
+        }
       }
-    }
-    onChange({
-      ...data,
-      motoboys: data.motoboys.filter((m) => m.id !== id),
-      routesByDate,
-      finance: data.finance.filter((f) => f.motoboyId !== id),
-    });
-    if (editingId === id) {
-      setEditingId(null);
-      setEdit(emptyDraft());
+      onChange({
+        ...data,
+        motoboys: data.motoboys.filter((m) => m.id !== id),
+        routesByDate,
+        finance: data.finance.filter((f) => f.motoboyId !== id),
+      });
+      if (editingId === id) {
+        setEditingId(null);
+        setEdit(emptyDraft());
+      }
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Falha ao remover motoboy.");
     }
   }
 

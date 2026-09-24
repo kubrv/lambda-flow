@@ -22,7 +22,7 @@ import {
   wazeNavigateUrl,
 } from "../../lib/mapsLinks";
 import { normalizeAddress } from "../../lib/parseAddress";
-import { upsertSavedAddress } from "../../lib/storage";
+import { deleteSavedAddress, upsertSavedAddress } from "../../lib/storage";
 import type { AppData, SavedAddress } from "../../lib/types";
 
 type Props = {
@@ -465,12 +465,20 @@ export function AddressesAdmin({ data, onChange }: Props) {
     }
   }
 
-  function remove(id: string) {
-    onChange({
-      ...data,
-      addresses: data.addresses.filter((a) => a.id !== id),
-    });
-    if (editingId === id) cancelEdit();
+  async function remove(id: string) {
+    const ok = window.confirm("Remover este endereço do cadastro?");
+    if (!ok) return;
+    try {
+      await deleteSavedAddress(id);
+      onChange({
+        ...data,
+        addresses: data.addresses.filter((a) => a.id !== id),
+      });
+      if (editingId === id) cancelEdit();
+      setMsg("Endereço removido.");
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : "Falha ao remover endereço.");
+    }
   }
 
   function setAddressActive(id: string, active: boolean) {

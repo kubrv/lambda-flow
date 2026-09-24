@@ -14,7 +14,7 @@ import {
 } from "../../lib/labels";
 import { optimizeRouteApi } from "../../lib/optimizeApi";
 import { normalizeAddress, parsePlaceLine } from "../../lib/parseAddress";
-import { upsertSavedAddress } from "../../lib/storage";
+import { deleteDateRoute, upsertSavedAddress } from "../../lib/storage";
 import type {
   AppData,
   DayRoute,
@@ -306,7 +306,7 @@ export function RouteEditor({ data, date, onChange, actorName = "Admin" }: Props
     });
   }
 
-  function clearRoute() {
+  async function clearRoute() {
     if (locked) {
       setStatus({
         kind: "err",
@@ -325,6 +325,19 @@ export function RouteEditor({ data, date, onChange, actorName = "Admin" }: Props
       `Limpar a rota de ${dayLabel}? Isso remove paradas, km, atribuições e o valor automático deste dia.`,
     );
     if (!ok) return;
+
+    try {
+      await deleteDateRoute(date);
+    } catch (e) {
+      setStatus({
+        kind: "err",
+        text:
+          e instanceof Error
+            ? e.message
+            : "Falha ao limpar a rota no banco.",
+      });
+      return;
+    }
 
     const nextRoutes = { ...data.routesByDate };
     delete nextRoutes[date];
