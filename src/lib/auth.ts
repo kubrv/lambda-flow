@@ -131,6 +131,29 @@ export async function adminSetMotoboyPassword(
   });
 }
 
+/** Motoboy logado altera a própria senha (confirma a atual). */
+export async function changeOwnPassword(
+  currentPassword: string,
+  newPassword: string,
+) {
+  if (newPassword.length < 6) {
+    throw new Error("Nova senha com no mínimo 6 caracteres.");
+  }
+  const sb = getSupabase();
+  const { data: userData, error: userErr } = await sb.auth.getUser();
+  if (userErr || !userData.user?.email) {
+    throw new Error("Faça login novamente para alterar a senha.");
+  }
+  const email = userData.user.email;
+  const { error: checkErr } = await sb.auth.signInWithPassword({
+    email,
+    password: currentPassword,
+  });
+  if (checkErr) throw new Error("Senha atual incorreta.");
+  const { error } = await sb.auth.updateUser({ password: newPassword });
+  if (error) throw error;
+}
+
 /** Zera e-mails/usuários/senhas de todos os motoboys (mantém só o nome). */
 export async function resetAllMotoboyLogins() {
   return callMotoboyAccount({

@@ -200,15 +200,17 @@ export function MotoboysAdmin({ data, onChange }: Props) {
     setMsg("");
     const pwd = (resetPwd[m.id] || "").trim();
     if (pwd.length < 6) {
-      setErr("Nova senha com no mínimo 6 caracteres.");
+      setErr("Senha com no mínimo 6 caracteres.");
       return;
     }
-    if (!m.passwordSet && !m.userId) {
-      setErr("Gere o 1º acesso antes de alterar a senha.");
+    const email = (m.email || "").trim();
+    if (!email) {
+      setErr("Salve o e-mail do motoboy antes de criar a senha.");
       return;
     }
     setBusyId(m.id);
     try {
+      await saveData(data);
       await adminSetMotoboyPassword(m.id, pwd);
       setResetPwd((prev) => ({ ...prev, [m.id]: "" }));
       onChange({
@@ -218,10 +220,10 @@ export function MotoboysAdmin({ data, onChange }: Props) {
         ),
       });
       setMsg(
-        "Senha alterada. Ela não fica armazenada nem visível neste painel.",
+        "Senha definida. Não fica visível neste painel — o motoboy pode alterá-la no perfil.",
       );
     } catch (e) {
-      setErr(e instanceof Error ? e.message : "Falha ao alterar senha.");
+      setErr(e instanceof Error ? e.message : "Falha ao definir senha.");
     } finally {
       setBusyId(null);
     }
@@ -409,9 +411,10 @@ export function MotoboysAdmin({ data, onChange }: Props) {
     <section className="panel">
       <h2>Cadastro de motoboys</h2>
       <p className="lede">
-        Cadastre nome, telefone, e-mail e usuário. Gere o <strong>1º acesso</strong>{" "}
-        (código) — só o motoboy cria a senha. Depois você pode alterar a senha
-        (sem visualizá-la). Preferência de pagamento padrão: no fim da rota.
+        Cadastre nome, telefone, e-mail e usuário. Você pode{" "}
+        <strong>criar a senha</strong> (sem visualizá-la depois) ou gerar o{" "}
+        <strong>1º acesso</strong> para o motoboy criar. Depois, ele pode
+        alterar a senha no próprio perfil.
       </p>
       <div className="row-actions" style={{ marginBottom: "0.75rem" }}>
         <button
@@ -488,9 +491,9 @@ export function MotoboysAdmin({ data, onChange }: Props) {
                       <div className="hint">
                         Acesso:{" "}
                         {m.passwordSet
-                          ? "senha já definida pelo motoboy"
+                          ? "senha definida (admin ou motoboy)"
                           : m.email
-                            ? "aguardando 1º acesso (criar senha)"
+                            ? "e-mail ok — defina a senha ou gere 1º acesso"
                             : "sem e-mail/usuário ainda"}
                       </div>
                       <div className="moto-finance-line">
@@ -530,12 +533,16 @@ export function MotoboysAdmin({ data, onChange }: Props) {
                               : "Gerar 1º acesso"}
                         </button>
                       </div>
-                      {m.passwordSet || m.userId ? (
+                      {m.email ? (
                         <div
                           className="field"
                           style={{ marginTop: "0.5rem", maxWidth: 320 }}
                         >
-                          <label>Nova senha (não fica visível depois)</label>
+                          <label>
+                            {m.passwordSet
+                              ? "Alterar senha (não fica visível depois)"
+                              : "Criar senha (não fica visível depois)"}
+                          </label>
                           <input
                             type="password"
                             value={resetPwd[m.id] || ""}
@@ -545,7 +552,7 @@ export function MotoboysAdmin({ data, onChange }: Props) {
                                 [m.id]: e.target.value,
                               }))
                             }
-                            placeholder="Digite a nova senha"
+                            placeholder="Digite a senha"
                             autoComplete="new-password"
                           />
                           <button
@@ -555,7 +562,7 @@ export function MotoboysAdmin({ data, onChange }: Props) {
                             disabled={busyId === m.id}
                             onClick={() => void resetPassword(m)}
                           >
-                            Alterar senha
+                            {m.passwordSet ? "Alterar senha" : "Criar senha"}
                           </button>
                         </div>
                       ) : null}

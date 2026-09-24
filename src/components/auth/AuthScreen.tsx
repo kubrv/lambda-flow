@@ -95,8 +95,9 @@ export function AuthScreen({
           />
         </div>
         <p className="lede">
-          Motoboy: no 1º acesso use o código da empresa e crie sua senha. Depois
-          entre com usuário ou e-mail. Empresa: e-mail e senha.
+          Motoboy: entre com usuário ou e-mail. No 1º acesso use o código da
+          empresa, ou a senha que o admin criou. Depois você pode alterar a
+          senha no perfil.
         </p>
         {onBack ? (
           <button type="button" className="btn ghost" onClick={onBack}>

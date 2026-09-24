@@ -186,27 +186,85 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         .select("*")
         .eq("id", motoboyId)
         .maybeSingle();
-      if (!moto?.user_id) {
-        return res.status(400).json({
-          ok: false,
-          error: "Motoboy ainda sem acesso. Gere o 1º acesso primeiro.",
-        });
+      if (!moto) {
+        return res.status(404).json({ ok: false, error: "Motoboy não encontrado." });
       }
-      const upd = await sb.auth.admin.updateUserById(String(moto.user_id), {
-        password: newPassword,
+
+      const email = String(moto.email || "").trim().toLowerCase();
+      const username = String(moto.username || "").trim().toLowerCase();
+      const name = String(moto.name || "").trim();
+
+      let userId = (moto.user_id as string) || null;
+      if (!userId) {
+        if (!email) {
+          return res.status(400).json({
+            ok: false,
+            error: "Cadastre o e-mail do motoboy antes de criar a senha.",
+          });
+        }
+        const created = await sb.auth.admin.createUser({
+          email,
+          password: newPassword,
+          email_confirm: true,
+          user_metadata: {
+            full_name: name,
+            role: "motoboy",
+            motoboy_id: motoboyId,
+            username: username || undefined,
+          },
+        });
+        if (created.error) {
+          if (/already|registered|exists/i.test(created.error.message)) {
+            const listed = await sb.auth.admin.listUsers({ perPage: 200 });
+            const found = listed.data?.users?.find(
+              (u) => u.email?.toLowerCase() === email,
+            );
+            if (!found?.id) throw created.error;
+            userId = found.id;
+            const updExist = await sb.auth.admin.updateUserById(userId, {
+              password: newPassword,
+              email_confirm: true,
+            });
+            if (updExist.error) throw updExist.error;
+          } else {
+            throw created.error;
+          }
+        } else {
+          userId = created.data.user?.id || null;
+        }
+      } else {
+        const upd = await sb.auth.admin.updateUserById(userId, {
+          password: newPassword,
+        });
+        if (upd.error) throw upd.error;
+      }
+
+      if (!userId) throw new Error("Falha ao criar usuário do motoboy.");
+
+      await sb.from("profiles").upsert({
+        user_id: userId,
+        role: "motoboy",
+        motoboy_id: motoboyId,
+        full_name: name,
+        email: email || null,
+        username: username || null,
+        must_set_password: false,
       });
-      if (upd.error) throw upd.error;
+
       await sb
         .from("motoboys")
-        .update({ password_set: true, access_code_hash: null })
+        .update({
+          user_id: userId,
+          password_set: true,
+          access_code_hash: null,
+          access_code_expires_at: null,
+        })
         .eq("id", motoboyId);
-      await sb
-        .from("profiles")
-        .update({ must_set_password: false })
-        .eq("user_id", moto.user_id);
+
       return res.status(200).json({
         ok: true,
-        message: "Senha alterada. Ela não fica visível depois de salva.",
+        message:
+          "Senha definida pelo admin. Ela não fica visível depois de salva. O motoboy pode alterá-la no perfil.",
       });
     }
 
