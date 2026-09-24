@@ -3,6 +3,7 @@ import type {
   AppData,
   DayRoute,
   FinanceEntry,
+  Motoboy,
   SavedAddress,
   Stop,
   Weekday,
@@ -86,6 +87,8 @@ type FinanceRow = {
   created_at: string;
   source?: string | null;
   km?: number | null;
+  payment_method?: string | null;
+  paid_at?: string | null;
 };
 
 function mapStops(stops: Stop[] | null | undefined): Stop[] {
@@ -301,6 +304,13 @@ export async function loadData(): Promise<AppData> {
     phone?: string | null;
     company?: string | null;
     price_per_km?: number | null;
+    email?: string | null;
+    username?: string | null;
+    user_id?: string | null;
+    password_set?: boolean | null;
+    pay_day_preference?: string | null;
+    pay_method_preference?: string | null;
+    pix_key?: string | null;
   }[]).map((row) => ({
     id: row.id,
     name: row.name,
@@ -310,6 +320,15 @@ export async function loadData(): Promise<AppData> {
       row.price_per_km != null && Number(row.price_per_km) > 0
         ? Number(row.price_per_km)
         : undefined,
+    email: row.email?.trim() || undefined,
+    username: row.username?.trim() || undefined,
+    userId: row.user_id || undefined,
+    passwordSet: Boolean(row.password_set),
+    payDayPreference:
+      (row.pay_day_preference as Motoboy["payDayPreference"]) || "end_of_route",
+    payMethodPreference:
+      (row.pay_method_preference as Motoboy["payMethodPreference"]) || "pix",
+    pixKey: row.pix_key?.trim() || undefined,
   }));
 
   if (!settingsRes.error && settingsRes.data) {
@@ -406,6 +425,8 @@ export async function loadData(): Promise<AppData> {
         createdAt: row.created_at,
         source,
         km: row.km != null ? Number(row.km) : undefined,
+        paymentMethod: (row.payment_method as FinanceEntry["paymentMethod"]) || undefined,
+        paidAt: row.paid_at || null,
       };
     });
   }
@@ -433,29 +454,53 @@ export async function saveData(data: AppData): Promise<void> {
   }
 
   if (synced.motoboys.length) {
-    const up = await sb.from("motoboys").upsert(
-      synced.motoboys.map((m) => ({
-        id: m.id,
-        name: m.name,
-        phone: m.phone ?? null,
-        company: m.company?.trim() || null,
-        price_per_km:
-          m.pricePerKm != null && m.pricePerKm > 0 ? m.pricePerKm : null,
-      })),
-    );
+    const fullRows = synced.motoboys.map((m) => ({
+      id: m.id,
+      name: m.name,
+      phone: m.phone ?? null,
+      company: m.company?.trim() || null,
+      price_per_km:
+        m.pricePerKm != null && m.pricePerKm > 0 ? m.pricePerKm : null,
+      email: m.email?.trim().toLowerCase() || null,
+      username: m.username?.trim().toLowerCase() || null,
+      user_id: m.userId || null,
+      password_set: Boolean(m.passwordSet),
+      pay_day_preference: m.payDayPreference || "end_of_route",
+      pay_method_preference: m.payMethodPreference || "pix",
+      pix_key: m.pixKey?.trim() || null,
+    }));
+    const up = await sb.from("motoboys").upsert(fullRows);
     if (up.error) {
-      if (/company|price_per_km|column/i.test(up.error.message)) {
-        const fallback = await sb.from("motoboys").upsert(
+      if (/email|username|pay_day|pay_method|pix_key|password_set|user_id|column/i.test(up.error.message)) {
+        const mid = await sb.from("motoboys").upsert(
           synced.motoboys.map((m) => ({
             id: m.id,
             name: m.name,
             phone: m.phone ?? null,
+            company: m.company?.trim() || null,
+            price_per_km:
+              m.pricePerKm != null && m.pricePerKm > 0 ? m.pricePerKm : null,
           })),
         );
-        if (fallback.error) throw new Error(fallback.error.message);
-        console.warn(
-          "Rode supabase/migration_motoboy_profile.sql para salvar empresa/valor km.",
-        );
+        if (mid.error && /company|price_per_km|column/i.test(mid.error.message)) {
+          const fallback = await sb.from("motoboys").upsert(
+            synced.motoboys.map((m) => ({
+              id: m.id,
+              name: m.name,
+              phone: m.phone ?? null,
+            })),
+          );
+          if (fallback.error) throw new Error(fallback.error.message);
+          console.warn(
+            "Rode supabase/migration_motoboy_accounts.sql para contas e preferências.",
+          );
+        } else if (mid.error) {
+          throw new Error(mid.error.message);
+        } else {
+          console.warn(
+            "Rode supabase/migration_motoboy_accounts.sql para contas e preferências.",
+          );
+        }
       } else {
         throw new Error(up.error.message);
       }
@@ -669,11 +714,29 @@ export async function saveData(data: AppData): Promise<void> {
         created_at: f.createdAt,
         source: f.source ?? "manual",
         km: f.km ?? null,
+        payment_method: f.paymentMethod ?? null,
+        paid_at: f.paidAt ?? null,
       }));
       let finUp = await sb.from("finance_entries").upsert(rows);
+      if (finUp.error && /payment_method|paid_at|column/i.test(finUp.error.message)) {
+        finUp = await sb.from("finance_entries").upsert(
+          rows.map(({ payment_method: _p, paid_at: _a, ...rest }) => rest),
+        );
+        console.warn(
+          "Rode supabase/migration_motoboy_accounts.sql para formas de pagamento.",
+        );
+      }
       if (finUp.error && /source|column|km/i.test(finUp.error.message)) {
         finUp = await sb.from("finance_entries").upsert(
-          rows.map(({ source: _s, km: _k, ...rest }) => rest),
+          rows.map(
+            ({
+              source: _s,
+              km: _k,
+              payment_method: _p,
+              paid_at: _a,
+              ...rest
+            }) => rest,
+          ),
         );
       }
       if (finUp.error) throw new Error(finUp.error.message);

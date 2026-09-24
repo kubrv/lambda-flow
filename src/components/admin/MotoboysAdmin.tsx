@@ -1,6 +1,19 @@
 import { useState } from "react";
+import {
+  adminSetMotoboyPassword,
+  provisionMotoboyAccount,
+} from "../../lib/auth";
 import { motoboyFinanceSummary } from "../../lib/finance";
 import { formatMoneyBRL } from "../../lib/labels";
+import {
+  PAY_DAY_OPTIONS,
+  PAY_METHOD_OPTIONS,
+  payDayLabel,
+  payMethodLabel,
+  type PayDayPreference,
+  type PayMethod,
+} from "../../lib/payPrefs";
+import { saveData } from "../../lib/storage";
 import type { AppData, Motoboy } from "../../lib/types";
 import { DEFAULT_PRICE_PER_KM, createId } from "../../lib/types";
 
@@ -14,6 +27,11 @@ type Draft = {
   phone: string;
   company: string;
   pricePerKm: string;
+  email: string;
+  username: string;
+  payDayPreference: PayDayPreference;
+  payMethodPreference: PayMethod;
+  pixKey: string;
 };
 
 const emptyDraft = (): Draft => ({
@@ -21,13 +39,51 @@ const emptyDraft = (): Draft => ({
   phone: "",
   company: "",
   pricePerKm: String(DEFAULT_PRICE_PER_KM),
+  email: "",
+  username: "",
+  payDayPreference: "end_of_route",
+  payMethodPreference: "pix",
+  pixKey: "",
 });
+
+function fromMotoboy(m: Motoboy): Draft {
+  return {
+    name: m.name,
+    phone: m.phone || "",
+    company: m.company || "",
+    pricePerKm: String(m.pricePerKm ?? DEFAULT_PRICE_PER_KM),
+    email: m.email || "",
+    username: m.username || "",
+    payDayPreference: m.payDayPreference || "end_of_route",
+    payMethodPreference: m.payMethodPreference || "pix",
+    pixKey: m.pixKey || "",
+  };
+}
+
+function applyDraft(m: Motoboy, d: Draft, parsePrice: (s: string) => number): Motoboy {
+  return {
+    ...m,
+    name: d.name.trim(),
+    phone: d.phone.trim() || undefined,
+    company: d.company.trim() || undefined,
+    pricePerKm: parsePrice(d.pricePerKm),
+    email: d.email.trim().toLowerCase() || undefined,
+    username: d.username.trim().toLowerCase() || undefined,
+    payDayPreference: d.payDayPreference,
+    payMethodPreference: d.payMethodPreference,
+    pixKey: d.pixKey.trim() || undefined,
+  };
+}
 
 export function MotoboysAdmin({ data, onChange }: Props) {
   const [draft, setDraft] = useState<Draft>(emptyDraft);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [edit, setEdit] = useState<Draft>(emptyDraft);
   const [msg, setMsg] = useState("");
+  const [err, setErr] = useState("");
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [accessCodes, setAccessCodes] = useState<Record<string, string>>({});
+  const [resetPwd, setResetPwd] = useState<Record<string, string>>({});
 
   function parsePrice(raw: string): number {
     const n = Number(raw);
@@ -35,58 +91,139 @@ export function MotoboysAdmin({ data, onChange }: Props) {
   }
 
   function add() {
+    setErr("");
     const n = draft.name.trim();
     if (!n) {
-      setMsg("Informe o nome do motoboy.");
+      setMsg("");
+      setErr("Informe o nome do motoboy.");
       return;
     }
-    const motoboy: Motoboy = {
-      id: createId(),
-      name: n,
-      phone: draft.phone.trim() || undefined,
-      company: draft.company.trim() || undefined,
-      pricePerKm: parsePrice(draft.pricePerKm),
-    };
+    const motoboy: Motoboy = applyDraft(
+      { id: createId(), name: n, passwordSet: false },
+      draft,
+      parsePrice,
+    );
     onChange({ ...data, motoboys: [...data.motoboys, motoboy] });
     setDraft(emptyDraft());
-    setMsg("Motoboy cadastrado.");
+    setMsg(
+      "Motoboy cadastrado. Preencha e-mail/usuário e clique em «Gerar 1º acesso» para ele criar a senha.",
+    );
   }
 
   function startEdit(m: Motoboy) {
     setEditingId(m.id);
-    setEdit({
-      name: m.name,
-      phone: m.phone || "",
-      company: m.company || "",
-      pricePerKm: String(m.pricePerKm ?? DEFAULT_PRICE_PER_KM),
-    });
+    setEdit(fromMotoboy(m));
     setMsg("");
+    setErr("");
   }
 
   function saveEdit() {
     if (!editingId) return;
+    setErr("");
     const n = edit.name.trim();
     if (!n) {
-      setMsg("Informe o nome.");
+      setErr("Informe o nome.");
       return;
     }
     onChange({
       ...data,
       motoboys: data.motoboys.map((m) =>
-        m.id === editingId
-          ? {
-              ...m,
-              name: n,
-              phone: edit.phone.trim() || undefined,
-              company: edit.company.trim() || undefined,
-              pricePerKm: parsePrice(edit.pricePerKm),
-            }
-          : m,
+        m.id === editingId ? applyDraft(m, edit, parsePrice) : m,
       ),
     });
     setEditingId(null);
     setEdit(emptyDraft());
-    setMsg("Perfil do motoboy atualizado.");
+    setMsg("Perfil atualizado (nome, telefone, e-mail, usuário e preferências).");
+  }
+
+  async function generateAccess(m: Motoboy) {
+    setErr("");
+    setMsg("");
+    const email = (editingId === m.id ? edit.email : m.email || "").trim();
+    const username = (editingId === m.id ? edit.username : m.username || "")
+      .trim()
+      .toLowerCase();
+    const name = (editingId === m.id ? edit.name : m.name).trim();
+    const phone = (editingId === m.id ? edit.phone : m.phone || "").trim();
+    if (!email || !username || !name) {
+      setErr("Salve nome, e-mail e usuário antes de gerar o 1º acesso.");
+      return;
+    }
+    // persiste campos no perfil local antes da API
+    const patched = data.motoboys.map((row) =>
+      row.id === m.id
+        ? {
+            ...row,
+            name,
+            email: email.toLowerCase(),
+            username,
+            phone: phone || undefined,
+          }
+        : row,
+    );
+    const nextData = { ...data, motoboys: patched };
+    onChange(nextData);
+
+    setBusyId(m.id);
+    try {
+      await saveData(nextData);
+      const result = await provisionMotoboyAccount({
+        motoboyId: m.id,
+        name,
+        email,
+        username,
+        phone,
+      });
+      const code = String(result.accessCode || "");
+      setAccessCodes((prev) => ({ ...prev, [m.id]: code }));
+      onChange({
+        ...nextData,
+        motoboys: patched.map((row) =>
+          row.id === m.id
+            ? { ...row, passwordSet: false, email: email.toLowerCase(), username }
+            : row,
+        ),
+      });
+      setMsg(
+        `Código de 1º acesso gerado para ${name}. Entregue só a ele — a senha só ele cria.`,
+      );
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Falha ao gerar acesso.");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function resetPassword(m: Motoboy) {
+    setErr("");
+    setMsg("");
+    const pwd = (resetPwd[m.id] || "").trim();
+    if (pwd.length < 6) {
+      setErr("Nova senha com no mínimo 6 caracteres.");
+      return;
+    }
+    if (!m.passwordSet && !m.userId) {
+      setErr("Gere o 1º acesso antes de alterar a senha.");
+      return;
+    }
+    setBusyId(m.id);
+    try {
+      await adminSetMotoboyPassword(m.id, pwd);
+      setResetPwd((prev) => ({ ...prev, [m.id]: "" }));
+      onChange({
+        ...data,
+        motoboys: data.motoboys.map((row) =>
+          row.id === m.id ? { ...row, passwordSet: true } : row,
+        ),
+      });
+      setMsg(
+        "Senha alterada. Ela não fica armazenada nem visível neste painel.",
+      );
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Falha ao alterar senha.");
+    } finally {
+      setBusyId(null);
+    }
   }
 
   function remove(id: string) {
@@ -108,64 +245,147 @@ export function MotoboysAdmin({ data, onChange }: Props) {
     }
   }
 
+  function profileFields(
+    value: Draft,
+    setValue: (d: Draft) => void,
+    idPrefix: string,
+  ) {
+    return (
+      <div className="moto-profile-grid">
+        <div className="field">
+          <label htmlFor={`${idPrefix}-name`}>Nome completo</label>
+          <input
+            id={`${idPrefix}-name`}
+            value={value.name}
+            onChange={(e) => setValue({ ...value, name: e.target.value })}
+            placeholder="Nome"
+          />
+        </div>
+        <div className="field">
+          <label htmlFor={`${idPrefix}-phone`}>Telefone</label>
+          <input
+            id={`${idPrefix}-phone`}
+            value={value.phone}
+            onChange={(e) => setValue({ ...value, phone: e.target.value })}
+            placeholder="(11) 90000-0000"
+          />
+        </div>
+        <div className="field">
+          <label htmlFor={`${idPrefix}-email`}>E-mail</label>
+          <input
+            id={`${idPrefix}-email`}
+            type="email"
+            value={value.email}
+            onChange={(e) => setValue({ ...value, email: e.target.value })}
+            placeholder="motoboy@email.com"
+          />
+        </div>
+        <div className="field">
+          <label htmlFor={`${idPrefix}-user`}>Usuário</label>
+          <input
+            id={`${idPrefix}-user`}
+            value={value.username}
+            onChange={(e) =>
+              setValue({
+                ...value,
+                username: e.target.value.toLowerCase().replace(/\s+/g, ""),
+              })
+            }
+            placeholder="ex: joao.moto"
+            autoComplete="off"
+          />
+        </div>
+        <div className="field">
+          <label htmlFor={`${idPrefix}-company`}>Empresa</label>
+          <input
+            id={`${idPrefix}-company`}
+            value={value.company}
+            onChange={(e) => setValue({ ...value, company: e.target.value })}
+            placeholder="Ex: Lambda / Frota X"
+          />
+        </div>
+        <div className="field">
+          <label htmlFor={`${idPrefix}-price`}>Valor por km (R$)</label>
+          <input
+            id={`${idPrefix}-price`}
+            type="number"
+            min="0.01"
+            step="0.01"
+            value={value.pricePerKm}
+            onChange={(e) =>
+              setValue({ ...value, pricePerKm: e.target.value })
+            }
+          />
+        </div>
+        <div className="field">
+          <label htmlFor={`${idPrefix}-payday`}>Dia de pagamento</label>
+          <select
+            id={`${idPrefix}-payday`}
+            value={value.payDayPreference}
+            onChange={(e) =>
+              setValue({
+                ...value,
+                payDayPreference: e.target.value as PayDayPreference,
+              })
+            }
+          >
+            {PAY_DAY_OPTIONS.map((o) => (
+              <option key={o.id} value={o.id}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="field">
+          <label htmlFor={`${idPrefix}-paymethod`}>Método preferido</label>
+          <select
+            id={`${idPrefix}-paymethod`}
+            value={value.payMethodPreference}
+            onChange={(e) =>
+              setValue({
+                ...value,
+                payMethodPreference: e.target.value as PayMethod,
+              })
+            }
+          >
+            {PAY_METHOD_OPTIONS.map((o) => (
+              <option key={o.id} value={o.id}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="field">
+          <label htmlFor={`${idPrefix}-pix`}>Chave PIX (opcional)</label>
+          <input
+            id={`${idPrefix}-pix`}
+            value={value.pixKey}
+            onChange={(e) => setValue({ ...value, pixKey: e.target.value })}
+            placeholder="CPF, e-mail ou telefone"
+          />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <section className="panel">
       <h2>Cadastro de motoboys</h2>
       <p className="lede">
-        Perfil com nome, telefone, empresa e valor/km. Para dar login ao
-        motoboy, gere um código na aba <strong>Códigos</strong> e envie para ele
-        se cadastrar (e-mail + senha + código).
+        A empresa cadastra nome, telefone, e-mail e usuário. Só o motoboy cria a
+        senha no 1º acesso. Você pode redefinir a senha depois (sem visualizá-la).
+        Preferência de pagamento padrão: no fim da rota.
       </p>
 
       <div className="form-grid">
-        <div className="moto-profile-grid">
-          <div className="field">
-            <label htmlFor="m-name">Nome</label>
-            <input
-              id="m-name"
-              value={draft.name}
-              onChange={(e) => setDraft({ ...draft, name: e.target.value })}
-              placeholder="Nome"
-            />
-          </div>
-          <div className="field">
-            <label htmlFor="m-phone">Telefone</label>
-            <input
-              id="m-phone"
-              value={draft.phone}
-              onChange={(e) => setDraft({ ...draft, phone: e.target.value })}
-              placeholder="(11) 90000-0000"
-            />
-          </div>
-          <div className="field">
-            <label htmlFor="m-company">Empresa</label>
-            <input
-              id="m-company"
-              value={draft.company}
-              onChange={(e) => setDraft({ ...draft, company: e.target.value })}
-              placeholder="Ex: Lambda / Frota X"
-            />
-          </div>
-          <div className="field">
-            <label htmlFor="m-price">Valor por km (R$)</label>
-            <input
-              id="m-price"
-              type="number"
-              min="0.01"
-              step="0.01"
-              value={draft.pricePerKm}
-              onChange={(e) =>
-                setDraft({ ...draft, pricePerKm: e.target.value })
-              }
-            />
-          </div>
-        </div>
+        {profileFields(draft, setDraft, "m")}
         <div className="row-actions">
           <button type="button" className="btn primary" onClick={add}>
             Adicionar motoboy
           </button>
         </div>
         {msg ? <div className="status ok">{msg}</div> : null}
+        {err ? <div className="status err">{err}</div> : null}
 
         <div className="motoboy-list">
           {data.motoboys.map((m) => {
@@ -174,51 +394,12 @@ export function MotoboysAdmin({ data, onChange }: Props) {
             ).length;
             const fin = motoboyFinanceSummary(data.finance, m.id);
             const rate = m.pricePerKm ?? DEFAULT_PRICE_PER_KM;
+            const shownCode = accessCodes[m.id];
             return (
               <div className="motoboy-item finance-item" key={m.id}>
                 {editingId === m.id ? (
                   <div className="form-grid" style={{ flex: 1, width: "100%" }}>
-                    <div className="moto-profile-grid">
-                      <div className="field">
-                        <label>Nome</label>
-                        <input
-                          value={edit.name}
-                          onChange={(e) =>
-                            setEdit({ ...edit, name: e.target.value })
-                          }
-                        />
-                      </div>
-                      <div className="field">
-                        <label>Telefone</label>
-                        <input
-                          value={edit.phone}
-                          onChange={(e) =>
-                            setEdit({ ...edit, phone: e.target.value })
-                          }
-                        />
-                      </div>
-                      <div className="field">
-                        <label>Empresa</label>
-                        <input
-                          value={edit.company}
-                          onChange={(e) =>
-                            setEdit({ ...edit, company: e.target.value })
-                          }
-                        />
-                      </div>
-                      <div className="field">
-                        <label>Valor por km (R$)</label>
-                        <input
-                          type="number"
-                          min="0.01"
-                          step="0.01"
-                          value={edit.pricePerKm}
-                          onChange={(e) =>
-                            setEdit({ ...edit, pricePerKm: e.target.value })
-                          }
-                        />
-                      </div>
-                    </div>
+                    {profileFields(edit, setEdit, `e-${m.id}`)}
                     <div className="row-actions">
                       <button
                         type="button"
@@ -241,12 +422,27 @@ export function MotoboysAdmin({ data, onChange }: Props) {
                   </div>
                 ) : (
                   <>
-                    <div>
+                    <div style={{ flex: 1 }}>
                       <strong>{m.name}</strong>
                       <div className="hint">
+                        {m.username ? `@${m.username} · ` : ""}
+                        {m.email ? `${m.email} · ` : ""}
                         {m.company ? `${m.company} · ` : ""}
                         {m.phone ? `${m.phone} · ` : ""}
                         {formatMoneyBRL(rate)}/km · {days} dia(s) com rota
+                      </div>
+                      <div className="hint">
+                        Pagamento: {payDayLabel(m.payDayPreference)} ·{" "}
+                        {payMethodLabel(m.payMethodPreference)}
+                        {m.pixKey ? ` · PIX ${m.pixKey}` : ""}
+                      </div>
+                      <div className="hint">
+                        Acesso:{" "}
+                        {m.passwordSet
+                          ? "senha já definida pelo motoboy"
+                          : m.email
+                            ? "aguardando 1º acesso (criar senha)"
+                            : "sem e-mail/usuário ainda"}
                       </div>
                       <div className="moto-finance-line">
                         <span>
@@ -262,6 +458,58 @@ export function MotoboysAdmin({ data, onChange }: Props) {
                           <strong>{formatMoneyBRL(fin.earned)}</strong>
                         </span>
                       </div>
+                      {shownCode ? (
+                        <div className="status ok" style={{ marginTop: "0.5rem" }}>
+                          Código de 1º acesso (mostre uma vez):{" "}
+                          <strong>{shownCode}</strong>
+                        </div>
+                      ) : null}
+                      <div
+                        className="row-actions"
+                        style={{ marginTop: "0.65rem", flexWrap: "wrap" }}
+                      >
+                        <button
+                          type="button"
+                          className="btn"
+                          disabled={busyId === m.id}
+                          onClick={() => void generateAccess(m)}
+                        >
+                          {busyId === m.id
+                            ? "Gerando…"
+                            : m.passwordSet
+                              ? "Gerar novo código de 1º acesso"
+                              : "Gerar 1º acesso"}
+                        </button>
+                      </div>
+                      {m.passwordSet || m.userId ? (
+                        <div
+                          className="field"
+                          style={{ marginTop: "0.5rem", maxWidth: 320 }}
+                        >
+                          <label>Nova senha (não fica visível depois)</label>
+                          <input
+                            type="password"
+                            value={resetPwd[m.id] || ""}
+                            onChange={(e) =>
+                              setResetPwd((prev) => ({
+                                ...prev,
+                                [m.id]: e.target.value,
+                              }))
+                            }
+                            placeholder="Digite a nova senha"
+                            autoComplete="new-password"
+                          />
+                          <button
+                            type="button"
+                            className="btn"
+                            style={{ marginTop: "0.35rem" }}
+                            disabled={busyId === m.id}
+                            onClick={() => void resetPassword(m)}
+                          >
+                            Alterar senha
+                          </button>
+                        </div>
+                      ) : null}
                     </div>
                     <div className="row-actions">
                       <button

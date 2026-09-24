@@ -20,6 +20,7 @@ export type Profile = {
   motoboyId: string | null;
   fullName: string;
   email: string;
+  username?: string | null;
 };
 
 export type InviteCode = {
@@ -57,7 +58,77 @@ export function mapProfile(row: Record<string, unknown>): Profile {
     motoboyId: (row.motoboy_id as string) || null,
     fullName: String(row.full_name || ""),
     email: String(row.email || ""),
+    username: (row.username as string) || null,
   };
+}
+
+async function callMotoboyAccount(
+  body: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
+  const res = await fetch("/api/motoboy-account", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const json = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+  if (!res.ok || !json.ok) {
+    throw new Error(String(json.error || "Falha na operação de conta."));
+  }
+  return json;
+}
+
+/** Resolve usuário ou e-mail para o e-mail real do Auth. */
+export async function resolveLoginEmail(login: string): Promise<string> {
+  const trimmed = login.trim();
+  if (!trimmed) throw new Error("Informe usuário ou e-mail.");
+  if (trimmed.includes("@")) return trimmed.toLowerCase();
+  const json = await callMotoboyAccount({
+    action: "resolve-login",
+    login: trimmed,
+  });
+  return String(json.email || "").toLowerCase();
+}
+
+export async function signInWithLogin(login: string, password: string) {
+  const email = await resolveLoginEmail(login);
+  return signIn(email, password);
+}
+
+export async function completeMotoboyFirstAccess(input: {
+  login: string;
+  accessCode: string;
+  password: string;
+}) {
+  return callMotoboyAccount({
+    action: "first-access",
+    login: input.login,
+    accessCode: input.accessCode,
+    password: input.password,
+  });
+}
+
+export async function provisionMotoboyAccount(input: {
+  motoboyId: string;
+  name: string;
+  email: string;
+  username: string;
+  phone?: string;
+}) {
+  return callMotoboyAccount({
+    action: "provision",
+    ...input,
+  });
+}
+
+export async function adminSetMotoboyPassword(
+  motoboyId: string,
+  newPassword: string,
+) {
+  return callMotoboyAccount({
+    action: "admin-set-password",
+    motoboyId,
+    newPassword,
+  });
 }
 
 export function companyHasActivePlan(company: Company | null): boolean {

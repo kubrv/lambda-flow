@@ -14,6 +14,11 @@ import {
   formatMoneyBRL,
   resolveMotoboyPricePerKm,
 } from "../../lib/labels";
+import {
+  PAY_METHOD_OPTIONS,
+  payMethodLabel,
+  type PayMethod,
+} from "../../lib/payPrefs";
 import { printFinancePdf } from "../../lib/printFinancePdf";
 import { printPeriodFinancePdf } from "../../lib/printMonthlyFinancePdf";
 import type { AppData, FinanceEntry } from "../../lib/types";
@@ -36,6 +41,8 @@ export function FinanceAdmin({ data, onChange }: Props) {
   const [reportFrom, setReportFrom] = useState(monthStart);
   const [reportTo, setReportTo] = useState(today);
   const [msg, setMsg] = useState("");
+  const [settleId, setSettleId] = useState<string | null>(null);
+  const [settleMethod, setSettleMethod] = useState<PayMethod>("pix");
 
   const selectedMotoboy = data.motoboys.find((m) => m.id === motoboyId);
   const rate = resolveMotoboyPricePerKm(
@@ -103,11 +110,42 @@ export function FinanceAdmin({ data, onChange }: Props) {
     setMsg("Lançamento adicionado.");
   }
 
-  function setStatus(id: string, status: "open" | "paid") {
+  function openSettle(entry: FinanceEntry) {
+    const moto = data.motoboys.find((m) => m.id === entry.motoboyId);
+    setSettleId(entry.id);
+    setSettleMethod(
+      (entry.paymentMethod as PayMethod) ||
+        moto?.payMethodPreference ||
+        "pix",
+    );
+  }
+
+  function confirmSettle() {
+    if (!settleId) return;
     onChange({
       ...data,
       finance: data.finance.map((e) =>
-        e.id === id ? { ...e, status } : e,
+        e.id === settleId
+          ? {
+              ...e,
+              status: "paid",
+              paymentMethod: settleMethod,
+              paidAt: new Date().toISOString(),
+            }
+          : e,
+      ),
+    });
+    setSettleId(null);
+    setMsg(`Marcado como recebido via ${payMethodLabel(settleMethod)}.`);
+  }
+
+  function reopen(id: string) {
+    onChange({
+      ...data,
+      finance: data.finance.map((e) =>
+        e.id === id
+          ? { ...e, status: "open", paymentMethod: undefined, paidAt: null }
+          : e,
       ),
     });
   }
@@ -147,12 +185,16 @@ export function FinanceAdmin({ data, onChange }: Props) {
     }
   }
 
+  const settling = settleId
+    ? data.finance.find((e) => e.id === settleId)
+    : null;
+
   return (
     <section className="panel">
       <h2>Registro financeiro</h2>
       <p className="lede">
-        Ao gerar a rota, o valor usa o km × preço/km do motoboy. Relatórios por
-        período: escolha de qual data até qual data.
+        Ao gerar a rota, o valor usa o km × preço/km do motoboy. Ao marcar
+        recebido, escolha a forma de pagamento (PIX, dinheiro, transferência…).
       </p>
 
       <div className="meta-grid" style={{ marginBottom: "1rem" }}>
@@ -249,6 +291,47 @@ export function FinanceAdmin({ data, onChange }: Props) {
           );
         })}
       </div>
+
+      {settling ? (
+        <div className="period-box" style={{ marginBottom: "1rem" }}>
+          <h3>Confirmar recebimento</h3>
+          <p className="hint">
+            {data.motoboys.find((m) => m.id === settling.motoboyId)?.name ||
+              "Motoboy"}{" "}
+            · {formatMoneyBRL(settling.amount)}
+          </p>
+          <div className="field">
+            <label htmlFor="settle-method">Forma de pagamento</label>
+            <select
+              id="settle-method"
+              value={settleMethod}
+              onChange={(e) => setSettleMethod(e.target.value as PayMethod)}
+            >
+              {PAY_METHOD_OPTIONS.map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="row-actions" style={{ marginTop: "0.75rem" }}>
+            <button
+              type="button"
+              className="btn primary"
+              onClick={confirmSettle}
+            >
+              Confirmar recebimento
+            </button>
+            <button
+              type="button"
+              className="btn"
+              onClick={() => setSettleId(null)}
+            >
+              Cancelar
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       <div className="form-grid">
         <h3>Lançamento manual</h3>
@@ -359,6 +442,9 @@ export function FinanceAdmin({ data, onChange }: Props) {
                     </strong>
                     <div className="hint">
                       {e.status === "open" ? "Pendente" : "Acertado / pago"}
+                      {e.paymentMethod
+                        ? ` · ${payMethodLabel(e.paymentMethod)}`
+                        : ""}
                       {e.source === "auto-route" ? " · automático" : " · manual"}
                       {moto?.company ? ` · ${moto.company}` : ""}
                       {e.routeDates.length
@@ -378,15 +464,15 @@ export function FinanceAdmin({ data, onChange }: Props) {
                       <button
                         type="button"
                         className="btn"
-                        onClick={() => setStatus(e.id, "paid")}
+                        onClick={() => openSettle(e)}
                       >
-                        Marcar acertado
+                        Marcar recebido
                       </button>
                     ) : (
                       <button
                         type="button"
                         className="btn"
-                        onClick={() => setStatus(e.id, "open")}
+                        onClick={() => reopen(e.id)}
                       >
                         Reabrir
                       </button>

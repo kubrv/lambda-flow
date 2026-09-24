@@ -17,6 +17,8 @@ export const WEEKDAYS: { id: Weekday; label: string; short: string }[] = [
   { id: "dom", label: "Domingo", short: "Dom" },
 ];
 
+import type { PayDayPreference, PayMethod } from "./payPrefs";
+
 export type Motoboy = {
   id: string;
   name: string;
@@ -25,6 +27,16 @@ export type Motoboy = {
   company?: string;
   /** Valor por km deste motoboy (não é global). */
   pricePerKm?: number;
+  /** Conta de acesso (admin preenche; senha só no 1º acesso do boy). */
+  email?: string;
+  username?: string;
+  userId?: string;
+  passwordSet?: boolean;
+  /** Preferência de quando receber (padrão: fim da rota). */
+  payDayPreference?: PayDayPreference;
+  /** Preferência de forma de pagamento. */
+  payMethodPreference?: PayMethod;
+  pixKey?: string;
 };
 
 export type { HoursPeriod } from "./hours";
@@ -143,6 +155,9 @@ export type FinanceEntry = {
   source?: "auto-route" | "manual";
   /** Km usados no cálculo automático. */
   km?: number;
+  /** Forma usada ao marcar como recebido/acertado. */
+  paymentMethod?: PayMethod;
+  paidAt?: string | null;
 };
 
 export type AppData = {

@@ -1,8 +1,10 @@
 import { useState } from "react";
 import {
   type AuthRole,
+  completeMotoboyFirstAccess,
   registerWithCode,
   signIn,
+  signInWithLogin,
 } from "../../lib/auth";
 
 type Props = {
@@ -11,7 +13,7 @@ type Props = {
   onCreateCompany?: () => void;
 };
 
-type Mode = "login" | "register";
+type Mode = "login" | "first-access" | "register";
 
 export function AuthScreen({
   onAuthenticated,
@@ -21,33 +23,69 @@ export function AuthScreen({
   const [role, setRole] = useState<AuthRole>("motoboy");
   const [mode, setMode] = useState<Mode>("login");
   const [fullName, setFullName] = useState("");
+  const [login, setLogin] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [accessCode, setAccessCode] = useState("");
   const [inviteCode, setInviteCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [okMsg, setOkMsg] = useState("");
+
+  function switchRole(next: AuthRole) {
+    setRole(next);
+    setError("");
+    setOkMsg("");
+    if (next === "company" && mode === "first-access") {
+      setMode("login");
+    }
+  }
 
   async function submit() {
     setError("");
+    setOkMsg("");
     setBusy(true);
     try {
       if (mode === "login") {
-        await signIn(email.trim(), password);
-      } else {
-        if (!fullName.trim()) throw new Error("Informe o nome.");
-        if (!inviteCode.trim()) throw new Error("Informe o código da empresa.");
-        await registerWithCode({
-          role,
-          fullName: fullName.trim(),
-          email: email.trim(),
-          password,
-          inviteCode: inviteCode.trim(),
-        });
-        try {
-          await signIn(email.trim(), password);
-        } catch {
-          // ok se já logado
+        const id = role === "motoboy" ? login.trim() : email.trim();
+        if (!id) throw new Error("Informe usuário ou e-mail.");
+        if (role === "motoboy") {
+          await signInWithLogin(id, password);
+        } else {
+          await signIn(id, password);
         }
+        onAuthenticated();
+        return;
+      }
+
+      if (mode === "first-access") {
+        if (!login.trim()) throw new Error("Informe usuário ou e-mail.");
+        if (!accessCode.trim()) throw new Error("Informe o código de 1º acesso.");
+        if (password.length < 6) throw new Error("Senha com no mínimo 6 caracteres.");
+        const result = await completeMotoboyFirstAccess({
+          login: login.trim(),
+          accessCode: accessCode.trim(),
+          password,
+        });
+        const resolvedEmail = String(result.email || login.trim());
+        await signIn(resolvedEmail, password);
+        onAuthenticated();
+        return;
+      }
+
+      if (!fullName.trim()) throw new Error("Informe o nome.");
+      if (!inviteCode.trim()) throw new Error("Informe o código da empresa.");
+      await registerWithCode({
+        role,
+        fullName: fullName.trim(),
+        email: email.trim(),
+        password,
+        inviteCode: inviteCode.trim(),
+      });
+      try {
+        await signIn(email.trim(), password);
+      } catch {
+        // ok se já logado
       }
       onAuthenticated();
     } catch (err) {
@@ -56,6 +94,13 @@ export function AuthScreen({
       setBusy(false);
     }
   }
+
+  const loginReady =
+    mode === "login"
+      ? Boolean((role === "motoboy" ? login : email).trim() && password)
+      : mode === "first-access"
+        ? Boolean(login.trim() && accessCode.trim() && password.length >= 6)
+        : Boolean(email.trim() && password && fullName.trim() && inviteCode.trim());
 
   return (
     <div className="auth-screen">
@@ -76,8 +121,8 @@ export function AuthScreen({
           />
         </div>
         <p className="lede">
-          Acesse como motoboy ou empresa. Motoboys veem as rotas; empresas
-          gerenciam o painel e o plano.
+          Motoboy: entre com usuário ou e-mail. No primeiro acesso, use o código
+          que a empresa passou e crie sua senha. Empresa: e-mail e senha.
         </p>
         {onBack ? (
           <button type="button" className="btn ghost" onClick={onBack}>
@@ -89,7 +134,7 @@ export function AuthScreen({
           <button
             type="button"
             className={`role-card${role === "motoboy" ? " active" : ""}`}
-            onClick={() => setRole("motoboy")}
+            onClick={() => switchRole("motoboy")}
           >
             <span className="role-icon" aria-hidden>
               <svg viewBox="0 0 24 24" width="28" height="28">
@@ -100,12 +145,12 @@ export function AuthScreen({
               </svg>
             </span>
             <strong>Motoboy</strong>
-            <small>Ver rotas · Maps · Waze</small>
+            <small>Usuário · e-mail · senha</small>
           </button>
           <button
             type="button"
             className={`role-card${role === "company" ? " active" : ""}`}
-            onClick={() => setRole("company")}
+            onClick={() => switchRole("company")}
           >
             <span className="role-icon" aria-hidden>
               <svg viewBox="0 0 24 24" width="28" height="28">
@@ -124,14 +169,35 @@ export function AuthScreen({
           <button
             type="button"
             className={`mode-tab${mode === "login" ? " active" : ""}`}
-            onClick={() => setMode("login")}
+            onClick={() => {
+              setMode("login");
+              setError("");
+              setOkMsg("");
+            }}
           >
             Entrar
           </button>
+          {role === "motoboy" ? (
+            <button
+              type="button"
+              className={`mode-tab${mode === "first-access" ? " active" : ""}`}
+              onClick={() => {
+                setMode("first-access");
+                setError("");
+                setOkMsg("");
+              }}
+            >
+              1º acesso
+            </button>
+          ) : null}
           <button
             type="button"
             className={`mode-tab${mode === "register" ? " active" : ""}`}
-            onClick={() => setMode("register")}
+            onClick={() => {
+              setMode("register");
+              setError("");
+              setOkMsg("");
+            }}
           >
             Cadastrar com código
           </button>
@@ -150,19 +216,57 @@ export function AuthScreen({
             </div>
           ) : null}
 
-          <div className="field">
-            <label>E-mail</label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="seu@email.com"
-              autoComplete="email"
-            />
-          </div>
+          {mode === "login" || mode === "first-access" ? (
+            <div className="field">
+              <label>
+                {role === "motoboy" ? "Usuário ou e-mail" : "E-mail"}
+              </label>
+              <input
+                type={role === "company" ? "email" : "text"}
+                value={role === "motoboy" ? login : email}
+                onChange={(e) =>
+                  role === "motoboy"
+                    ? setLogin(e.target.value)
+                    : setEmail(e.target.value)
+                }
+                placeholder={
+                  role === "motoboy" ? "usuario ou seu@email.com" : "seu@email.com"
+                }
+                autoComplete={role === "motoboy" ? "username" : "email"}
+              />
+            </div>
+          ) : (
+            <div className="field">
+              <label>E-mail</label>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="seu@email.com"
+                autoComplete="email"
+              />
+            </div>
+          )}
+
+          {mode === "first-access" ? (
+            <div className="field">
+              <label>Código de 1º acesso</label>
+              <input
+                value={accessCode}
+                onChange={(e) => setAccessCode(e.target.value.toUpperCase())}
+                placeholder="Código que a empresa passou"
+                autoComplete="one-time-code"
+              />
+              <p className="hint">
+                Só você cria a senha. A empresa não vê a senha depois.
+              </p>
+            </div>
+          ) : null}
 
           <div className="field">
-            <label>Senha</label>
+            <label>
+              {mode === "first-access" ? "Criar senha" : "Senha"}
+            </label>
             <input
               type="password"
               value={password}
@@ -183,33 +287,30 @@ export function AuthScreen({
                 placeholder="Código recebido"
                 autoComplete="off"
               />
-              <p className="hint">
-                Peça ao administrador da sua empresa.
-              </p>
+              <p className="hint">Peça ao administrador da sua empresa.</p>
             </div>
           ) : null}
 
           <button
             type="button"
             className="btn primary"
-            disabled={busy || !email.trim() || !password}
+            disabled={busy || !loginReady}
             onClick={() => void submit()}
           >
             {busy
               ? "Aguarde…"
               : mode === "login"
                 ? `Entrar como ${role === "company" ? "empresa" : "motoboy"}`
-                : "Criar conta"}
+                : mode === "first-access"
+                  ? "Criar senha e entrar"
+                  : "Criar conta"}
           </button>
 
           {error ? <div className="status err">{error}</div> : null}
+          {okMsg ? <div className="status ok">{okMsg}</div> : null}
 
           {onCreateCompany ? (
-            <button
-              type="button"
-              className="btn"
-              onClick={onCreateCompany}
-            >
+            <button type="button" className="btn" onClick={onCreateCompany}>
               Obter um plano para minha empresa
             </button>
           ) : null}

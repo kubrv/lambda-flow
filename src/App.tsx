@@ -6,6 +6,7 @@ import { BillingScreen } from "./components/billing/BillingScreen";
 import { Header } from "./components/Header";
 import { LandingPage } from "./components/landing/LandingPage";
 import { MonthCalendar } from "./components/MonthCalendar";
+import { MotoboyPrefsPanel } from "./components/MotoboyPrefsPanel";
 import { RouteView } from "./components/RouteView";
 import { WhatsAppFloat } from "./components/WhatsAppFloat";
 import { SiteFooter } from "./components/SiteFooter";
@@ -293,6 +294,13 @@ export default function App() {
               });
             }}
           />
+          {!isCompany ? (
+            <MotoboyPrefsPanel
+              data={data}
+              motoboyId={profile.motoboyId}
+              onChange={setData}
+            />
+          ) : null}
         </>
       )}
       <WhatsAppFloat />
