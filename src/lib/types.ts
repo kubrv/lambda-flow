@@ -188,7 +188,7 @@ export function emptyRoute(date: string): DayRoute {
     motoboyId: null,
     stops: [],
     totalKm: 0,
-    returnToStart: false,
+    returnToStart: true,
     optimizedAt: null,
     completionStatus: "open",
     motoboyReport: "",

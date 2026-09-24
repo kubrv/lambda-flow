@@ -5,7 +5,6 @@ import {
   upsertAutoRouteFinance,
 } from "../../lib/finance";
 import { formatKm } from "../../lib/geo";
-import { formatHoursLabel, normalizeHoursPeriods } from "../../lib/hours";
 import {
   cleanNickname,
   formatMoneyBRL,
@@ -89,10 +88,11 @@ export function RouteEditor({ data, date, onChange, actorName = "Admin" }: Props
   const [stopKinds, setStopKinds] = useState<Record<string, StopKindFlags>>({});
   const [stopNotes, setStopNotes] = useState<Record<string, string>>({});
   const [stopBoxes, setStopBoxes] = useState<Record<string, number>>({});
-  const [returnToStart, setReturnToStart] = useState(false);
+  const [returnToStart, setReturnToStart] = useState(true);
   const [filter, setFilter] = useState("");
   const [status, setStatus] = useState<Status>({ kind: "idle", text: "" });
   const [formEpoch, setFormEpoch] = useState(0);
+  const [liveKm, setLiveKm] = useState(0);
 
   // Recarrega ao trocar a data ou após limpar (formEpoch).
   useEffect(() => {
@@ -110,12 +110,18 @@ export function RouteEditor({ data, date, onChange, actorName = "Admin" }: Props
       setStartLng(route.startLng);
     }
     setMotoboyId(route.motoboyId ?? "");
-    setReturnToStart(Boolean(route.returnToStart));
+    // Novas rotas: retorno ligado por padrão; rotas já salvas respeitam o valor gravado.
+    setReturnToStart(
+      route.stops.length > 0 || route.optimizedAt
+        ? Boolean(route.returnToStart)
+        : true,
+    );
     const h = hydrateFromRoute(route, data.addresses);
     setSelectedIds(h.selectedIds);
     setStopKinds(h.stopKinds);
     setStopNotes(h.stopNotes);
     setStopBoxes(h.stopBoxes);
+    setLiveKm(Number(route.totalKm) || 0);
     setFilter("");
     // eslint-disable-next-line react-hooks/exhaustive-deps -- intencional
   }, [date, formEpoch]);
@@ -133,15 +139,91 @@ export function RouteEditor({ data, date, onChange, actorName = "Admin" }: Props
     [selectedIds, stopBoxes],
   );
 
+  const selectedMotoboy = data.motoboys.find((m) => m.id === motoboyId);
+  const liveRate = resolveMotoboyPricePerKm(
+    selectedMotoboy,
+    data.pricePerKm || DEFAULT_PRICE_PER_KM,
+  );
+  const liveFare = Math.round(liveKm * liveRate * 100) / 100;
+
   const filtered = useMemo(() => {
     const q = filter.trim().toLowerCase();
     if (!q) return data.addresses;
     return data.addresses.filter(
       (a) =>
         a.label.toLowerCase().includes(q) ||
-        a.address.toLowerCase().includes(q),
+        a.address.toLowerCase().includes(q) ||
+        cleanNickname(a.label, a.address).toLowerCase().includes(q),
     );
   }, [data.addresses, filter]);
+
+  useEffect(() => {
+    if (locked) return;
+    if (!selectedIds.length) {
+      setLiveKm(0);
+      return;
+    }
+    const start = resolvedStart();
+    if (!start.address.trim()) return;
+
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      void (async () => {
+        try {
+          const selected = selectedIds
+            .map((id) => data.addresses.find((a) => a.id === id))
+            .filter((a): a is SavedAddress => Boolean(a));
+          if (!selected.length) return;
+          const parsedStart = parsePlaceLine(start.address);
+          const cached =
+            data.coordCache[normalizeAddress(parsedStart.address)];
+          const result = await optimizeRouteApi({
+            startAddress: parsedStart.address.trim(),
+            startLat: start.lat ?? parsedStart.lat ?? cached?.lat ?? null,
+            startLng: start.lng ?? parsedStart.lng ?? cached?.lng ?? null,
+            returnToStart,
+            stops: selected.map((a) => {
+              const kinds = flagsToStopKinds(
+                stopKinds[a.id] || { ...DEFAULT_FLAGS },
+              );
+              return {
+                id: a.id,
+                addressId: a.id,
+                address: a.address,
+                label: cleanNickname(a.label, a.address),
+                kinds,
+                kind: kinds.length === 1 ? kinds[0] : undefined,
+                notes: stopNotes[a.id] || undefined,
+                boxes: normalizeBoxes(stopBoxes[a.id]),
+                complement: a.complement?.trim() || undefined,
+                hours: a.hours,
+                lat: a.lat,
+                lng: a.lng,
+              };
+            }),
+          });
+          if (!cancelled) setLiveKm(Number(result.totalKm) || 0);
+        } catch {
+          // Mantém o último km conhecido no preview.
+        }
+      })();
+    }, 450);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- preview ao mudar seleção
+  }, [
+    selectedIds,
+    returnToStart,
+    startMode,
+    startAddress,
+    startLat,
+    startLng,
+    locked,
+    date,
+  ]);
 
   function resolvedStart() {
     if (startMode === "default") {
@@ -233,6 +315,13 @@ export function RouteEditor({ data, date, onChange, actorName = "Admin" }: Props
     }
     if (!selectedIds.length) {
       setStatus({ kind: "err", text: "Selecione ao menos um endereço." });
+      return;
+    }
+    if (!motoboyId) {
+      setStatus({
+        kind: "err",
+        text: "Selecione um motoboy antes de salvar a rota.",
+      });
       return;
     }
 
@@ -375,6 +464,7 @@ export function RouteEditor({ data, date, onChange, actorName = "Admin" }: Props
       });
 
       const fare = result.totalKm * price;
+      setLiveKm(Number(result.totalKm) || 0);
       const financeNote =
         next.motoboyId && fare > 0
           ? ` · ${formatMoneyBRL(fare)} na conta do motoboy (${formatMoneyBRL(price)}/km)`
@@ -462,11 +552,12 @@ export function RouteEditor({ data, date, onChange, actorName = "Admin" }: Props
         ) : null}
 
         <div className="field">
-          <label htmlFor="motoboy">Motoboy</label>
+          <label htmlFor="motoboy">Motoboy (obrigatório)</label>
           <select
             id="motoboy"
             value={motoboyId}
             onChange={(e) => setMotoboyId(e.target.value)}
+            required
           >
             <option value="">Selecionar…</option>
             {data.motoboys.map((m) => (
@@ -480,6 +571,9 @@ export function RouteEditor({ data, date, onChange, actorName = "Admin" }: Props
               </option>
             ))}
           </select>
+          {!motoboyId ? (
+            <p className="hint">Escolha o motoboy para poder salvar a rota.</p>
+          ) : null}
         </div>
 
         <label className="address-check return-check">
@@ -490,8 +584,28 @@ export function RouteEditor({ data, date, onChange, actorName = "Admin" }: Props
           />
           <span>
             <strong>Retornar ao ponto de partida no fim</strong>
+            <small>Ligado por padrão</small>
           </span>
         </label>
+
+        <div className="live-fare-bar" role="status">
+          <div>
+            <label>Valor estimado da rota</label>
+            <strong>{formatMoneyBRL(liveFare)}</strong>
+          </div>
+          <div>
+            <label>Km</label>
+            <strong>{formatKm(liveKm)}</strong>
+          </div>
+          <div>
+            <label>Paradas</label>
+            <strong>{selectedIds.length}</strong>
+          </div>
+          <div>
+            <label>Caixas</label>
+            <strong>{draftBoxesTotal}</strong>
+          </div>
+        </div>
 
         <div className="field">
           <label htmlFor="filter">
@@ -501,7 +615,7 @@ export function RouteEditor({ data, date, onChange, actorName = "Admin" }: Props
             id="filter"
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
-            placeholder="Filtrar…"
+            placeholder="Filtrar por apelido…"
           />
         </div>
 
@@ -514,8 +628,12 @@ export function RouteEditor({ data, date, onChange, actorName = "Admin" }: Props
             filtered.map((a) => {
               const selected = selectedIds.includes(a.id);
               const flags = stopKinds[a.id] || DEFAULT_FLAGS;
+              const nick = cleanNickname(a.label, a.address);
               return (
-                <div key={a.id} className="address-check-row">
+                <div
+                  key={a.id}
+                  className={`address-check-row${selected ? " selected" : ""}`}
+                >
                   <label className="address-check">
                     <input
                       type="checkbox"
@@ -523,66 +641,60 @@ export function RouteEditor({ data, date, onChange, actorName = "Admin" }: Props
                       onChange={() => toggleAddress(a.id)}
                     />
                     <span>
-                      <strong>{cleanNickname(a.label, a.address)}</strong>
-                      <small>{a.address}</small>
-                      {a.complement?.trim() ? (
-                        <small className="addr-extra-line">
-                          Complemento: {a.complement.trim()}
-                        </small>
-                      ) : null}
-                      <small className="addr-extra-line">
-                        Horário: {formatHoursLabel(normalizeHoursPeriods(a.hours))}
-                      </small>
+                      <strong>{nick}</strong>
                     </span>
                   </label>
                   {selected ? (
                     <div className="stop-extra">
-                      <div className="kind-checks">
-                        <label className="kind-check">
-                          <input
-                            type="checkbox"
-                            checked={flags.entrega}
-                            onChange={() => toggleKindFlag(a.id, "entrega")}
-                          />
+                      <div className="kind-toggles" role="group" aria-label="Tipo">
+                        <button
+                          type="button"
+                          className={`kind-pill${flags.entrega ? " on" : ""}`}
+                          onClick={() => toggleKindFlag(a.id, "entrega")}
+                        >
                           Entrega
-                        </label>
-                        <label className="kind-check">
-                          <input
-                            type="checkbox"
-                            checked={flags.retirada}
-                            onChange={() => toggleKindFlag(a.id, "retirada")}
-                          />
+                        </button>
+                        <button
+                          type="button"
+                          className={`kind-pill${flags.retirada ? " on" : ""}`}
+                          onClick={() => toggleKindFlag(a.id, "retirada")}
+                        >
                           Retirada
+                        </button>
+                      </div>
+                      <div className="stop-extra-row">
+                        <label className="boxes-field">
+                          <span>Caixas</span>
+                          <input
+                            type="number"
+                            min={0}
+                            step={1}
+                            className="boxes-input"
+                            value={stopBoxes[a.id] ?? 0}
+                            onChange={(e) =>
+                              setStopBoxes((prev) => ({
+                                ...prev,
+                                [a.id]: normalizeBoxes(e.target.value),
+                              }))
+                            }
+                          />
                         </label>
                       </div>
-                      <label className="boxes-field">
-                        <span>Caixas</span>
-                        <input
-                          type="number"
-                          min={0}
-                          step={1}
-                          className="boxes-input"
-                          value={stopBoxes[a.id] ?? 0}
+                      <label className="notes-field">
+                        <span>Observações</span>
+                        <textarea
+                          className="notes-input"
+                          rows={3}
+                          value={stopNotes[a.id] || ""}
                           onChange={(e) =>
-                            setStopBoxes((prev) => ({
+                            setStopNotes((prev) => ({
                               ...prev,
-                              [a.id]: normalizeBoxes(e.target.value),
+                              [a.id]: e.target.value,
                             }))
                           }
+                          placeholder="Texto livre (opcional)"
                         />
                       </label>
-                      <textarea
-                        className="notes-input"
-                        rows={4}
-                        value={stopNotes[a.id] || ""}
-                        onChange={(e) =>
-                          setStopNotes((prev) => ({
-                            ...prev,
-                            [a.id]: e.target.value,
-                          }))
-                        }
-                        placeholder="Observações (texto livre, sem limite curto)"
-                      />
                     </div>
                   ) : null}
                 </div>
@@ -596,7 +708,7 @@ export function RouteEditor({ data, date, onChange, actorName = "Admin" }: Props
             type="button"
             className="btn primary"
             onClick={() => void optimizeAndSave()}
-            disabled={status.kind === "busy"}
+            disabled={status.kind === "busy" || !motoboyId || !selectedIds.length}
           >
             Salvar alterações
           </button>
@@ -611,29 +723,29 @@ export function RouteEditor({ data, date, onChange, actorName = "Admin" }: Props
         </div>
 
         <p className="hint">
-          Distância salva: <strong>{formatKm(saved.totalKm)}</strong>
-          {saved.totalKm > 0 ? (
-            <>
-              {" "}
-              · ~
-              <strong>
-                {formatMoneyBRL(
-                  saved.totalKm *
+          Distância: <strong>{formatKm(liveKm || saved.totalKm)}</strong>
+          {" · "}
+          Valor:{" "}
+          <strong>
+            {formatMoneyBRL(
+              liveKm > 0
+                ? liveFare
+                : saved.totalKm *
                     resolveMotoboyPricePerKm(
-                      data.motoboys.find((m) => m.id === (motoboyId || saved.motoboyId)),
+                      data.motoboys.find(
+                        (m) => m.id === (motoboyId || saved.motoboyId),
+                      ),
                       data.pricePerKm || DEFAULT_PRICE_PER_KM,
                     ),
-                )}
-              </strong>
-            </>
-          ) : null}
+            )}
+          </strong>
           {" · "}
-          Caixas na seleção:{" "}
+          Caixas:{" "}
           <strong className="boxes-total-inline">{draftBoxesTotal}</strong>
           {saved.stops.length ? (
             <>
               {" "}
-              · na rota salva:{" "}
+              · salvas:{" "}
               <strong className="boxes-total-inline">
                 {totalBoxes(saved.stops)}
               </strong>
