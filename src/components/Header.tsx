@@ -25,12 +25,7 @@ export function Header({
   return (
     <header className="site-header">
       <div className="logo-hit" aria-label="Lambda-Flow">
-        <BrandLogo height={42} />
-        {subtitle ? (
-          <span className="logo-copy logo-copy-only">
-            <span>{subtitle}</span>
-          </span>
-        ) : null}
+        <BrandLogo height={40} tagline={subtitle || undefined} />
       </div>
 
       <div className="admin-pill">

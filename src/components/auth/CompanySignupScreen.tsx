@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { PLAN_PRICE_BRL, signIn } from "../../lib/auth";
 import { formatMoneyBRL } from "../../lib/labels";
+import { BrandLogo } from "../BrandLogo";
 
 type Props = {
   onAuthenticated: () => void;
@@ -74,21 +75,7 @@ export function CompanySignupScreen({ onAuthenticated, onBack }: Props) {
   return (
     <div className="auth-screen">
       <div className="auth-card">
-        <div className="brand-row">
-          <img
-            className="brand-mark"
-            src="/badge.svg"
-            alt=""
-            width={56}
-            height={56}
-          />
-          <img
-            className="brand-wordmark"
-            src="/wordmark.svg"
-            alt="Lambda-Flow"
-            height={32}
-          />
-        </div>
+        <BrandLogo height={48} />
         <h2 className="auth-title">Obter um plano para minha empresa</h2>
         <p className="lede">
           Preencha os dados e pague {formatMoneyBRL(PLAN_PRICE_BRL)}/mês para

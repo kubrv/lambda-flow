@@ -1,13 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Lambda-Flow — wordmark (estilo Lambda-Strike / Orbitron) -->
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 96" role="img" aria-label="Lambda-Flow wordmark">
-  <title>Lambda-Flow Wordmark</title>
-  <text
-    x="0" y="68"
-    fill="#E8FBFF"
-    font-family="Orbitron, Manrope, Segoe UI, Arial, sans-serif"
-    font-size="56"
-    font-weight="800"
-    letter-spacing="2.2"
-  >Lambda-Flow</text>
+<!-- Wordmark geométrico (sem <text> — evita bug de fonte em <img>) -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 280 48" role="img" aria-label="Lambda-Flow">
+  <title>Lambda-Flow</title>
+  <!-- Fallback visual: mark + bars; o site usa texto HTML no BrandLogo -->
+  <g fill="#E8FBFF">
+    <rect x="0" y="14" width="6" height="22" rx="1"/>
+    <rect x="10" y="14" width="6" height="22" rx="1"/>
+    <rect x="20" y="14" width="6" height="22" rx="1"/>
+  </g>
 </svg>

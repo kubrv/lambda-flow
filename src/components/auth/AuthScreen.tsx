@@ -5,6 +5,7 @@ import {
   signIn,
   signInWithLogin,
 } from "../../lib/auth";
+import { BrandLogo } from "../BrandLogo";
 
 type Props = {
   onAuthenticated: () => void;
@@ -79,21 +80,7 @@ export function AuthScreen({
   return (
     <div className="auth-screen">
       <div className="auth-card">
-        <div className="brand-row">
-          <img
-            className="brand-mark"
-            src="/badge.svg"
-            alt=""
-            width={56}
-            height={56}
-          />
-          <img
-            className="brand-wordmark"
-            src="/wordmark.svg"
-            alt="Lambda-Flow"
-            height={32}
-          />
-        </div>
+        <BrandLogo height={48} />
         <p className="lede">
           Motoboy: entre com usuário ou e-mail. No 1º acesso use o código da
           empresa, ou a senha que o admin criou. Depois você pode alterar a

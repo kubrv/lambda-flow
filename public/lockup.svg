@@ -1,32 +1,16 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Lambda-Flow — lockup horizontal -->
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 128" role="img" aria-label="Lambda-Flow">
-  <title>Lambda-Flow Lockup</title>
+<!-- Lambda-Flow lockup horizontal (badge + paths, sem text externo) -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 112" role="img" aria-label="Lambda-Flow">
+  <title>Lambda-Flow</title>
   <defs>
-    <linearGradient id="badgeGrad" x1="0" y1="0" x2="1" y2="1">
+    <linearGradient id="lfBadge" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0%" stop-color="#38E8FF"/>
       <stop offset="100%" stop-color="#00C2D8"/>
     </linearGradient>
   </defs>
-  <rect x="0" y="10" width="108" height="108" rx="28" fill="url(#badgeGrad)"/>
+  <rect x="0" y="2" width="108" height="108" rx="28" fill="url(#lfBadge)"/>
   <g transform="translate(22 22)" fill="#031018">
     <path d="M18 54 L32 10 L38 10 L24 54 Z"/>
     <path d="M28 34 L50 54 L42 54 L26 38 Z"/>
   </g>
-  <text
-    x="132" y="62"
-    fill="#E8FBFF"
-    font-family="Orbitron, Manrope, Segoe UI, Arial, sans-serif"
-    font-size="40"
-    font-weight="800"
-    letter-spacing="1.8"
-  >Lambda-Flow</text>
-  <text
-    x="132" y="92"
-    fill="#7FB4C2"
-    font-family="Manrope, Segoe UI, Arial, sans-serif"
-    font-size="18"
-    font-weight="600"
-    letter-spacing="1"
-  >Rotas · Waze &amp; Maps</text>
 </svg>
