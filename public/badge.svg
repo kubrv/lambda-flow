@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Lambda-Flow badge (pacote lambda-strike) -->
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="Lambda-Flow">
-  <title>Lambda-Flow Badge</title>
+<!-- Lambda-Strike  badge as in the panel (cyan gradient + dark ») -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="Lambda-Strike badge">
+  <title>Lambda-Strike Badge</title>
   <defs>
     <linearGradient id="badgeGrad" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0%" stop-color="#38E8FF"/>
@@ -16,7 +16,7 @@
     </filter>
   </defs>
   <rect x="8" y="8" width="112" height="112" rx="28" fill="url(#badgeGrad)" filter="url(#glow)"/>
-  <g transform="translate(32 32)" fill="#031018">
+  <g transform="translate(32 32) scale(1)" fill="#031018">
     <path d="M18 54 L32 10 L38 10 L24 54 Z"/>
     <path d="M28 34 L50 54 L42 54 L26 38 Z"/>
   </g>

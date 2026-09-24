@@ -52,6 +52,10 @@ export function RouteView({
   const hasStops = route.stops.length > 0;
   const estimatedFare = route.totalKm * rate;
   const boxesSum = totalBoxes(route.stops);
+  const completion = route.completionStatus || "open";
+  const locked = completion === "completed" || completion === "verified";
+  const completedBy =
+    route.motoboyCompletedBy || motoboy?.name || "";
 
   const startPoint = pointFromCoords(
     route.startLat,
@@ -97,6 +101,19 @@ export function RouteView({
         Ordem do dia. Use os botões grandes para abrir a rota completa ou
         navegar parada a parada.
       </p>
+
+      {locked ? (
+        <div className="status ok" style={{ marginBottom: "0.75rem" }}>
+          {completion === "verified" ? "Verificada" : "Concluída"}
+          {completedBy ? (
+            <>
+              {" "}
+              por <strong>{completedBy}</strong>
+            </>
+          ) : null}
+          . Ordem e valores desta rota estão fechados.
+        </div>
+      ) : null}
 
       {hasStart || hasStops ? (
         <div className="route-nav-bar">
@@ -324,6 +341,7 @@ export function RouteView({
               route={route}
               role={role}
               actorName={actorName}
+              assignedMotoboyName={motoboy?.name || ""}
               canComplete={hasStart || hasStops}
               onUpdate={onRouteChange}
             />

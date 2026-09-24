@@ -73,6 +73,12 @@ export function RouteEditor({ data, date, onChange, actorName = "Admin" }: Props
   const saved = getRoute(data, date);
   const dayLabel = formatDateLabel(date);
   const preset = resolvePresetStart(data);
+  const completion = saved.completionStatus || "open";
+  const locked = completion === "completed" || completion === "verified";
+  const completedBy =
+    saved.motoboyCompletedBy ||
+    data.motoboys.find((m) => m.id === saved.motoboyId)?.name ||
+    "";
 
   const [startMode, setStartMode] = useState<StartMode>("default");
   const [startAddress, setStartAddress] = useState(preset.address);
@@ -181,6 +187,13 @@ export function RouteEditor({ data, date, onChange, actorName = "Admin" }: Props
   }
 
   function clearRoute() {
+    if (locked) {
+      setStatus({
+        kind: "err",
+        text: "Rota concluída — reabra a conclusão para editar ou limpar.",
+      });
+      return;
+    }
     if (status.kind === "busy") {
       setStatus({
         kind: "err",
@@ -206,6 +219,13 @@ export function RouteEditor({ data, date, onChange, actorName = "Admin" }: Props
   }
 
   async function optimizeAndSave() {
+    if (locked) {
+      setStatus({
+        kind: "err",
+        text: "Rota concluída — reabra a conclusão para alterar ordem, valores ou motoboy.",
+      });
+      return;
+    }
     const start = resolvedStart();
     if (!start.address) {
       setStatus({ kind: "err", text: "Informe o ponto de partida." });
@@ -375,11 +395,35 @@ export function RouteEditor({ data, date, onChange, actorName = "Admin" }: Props
   return (
     <section className="panel">
       <h2>Editar rota · {dayLabel}</h2>
-      <p className="lede">
-        <strong>Salvar alterações</strong> já recalcula a ordem e os km
-        automaticamente (e lança o valor na conta do motoboy).
-      </p>
+      {locked ? (
+        <div className="status ok" style={{ marginBottom: "0.75rem" }}>
+          Rota {completion === "verified" ? "verificada" : "concluída"}
+          {completedBy ? (
+            <>
+              {" "}
+              por <strong>{completedBy}</strong>
+            </>
+          ) : null}
+          . Ordem, valores e motoboy estão bloqueados — use{" "}
+          <strong>Reabrir</strong> em Conclusão da rota para editar.
+        </div>
+      ) : (
+        <p className="lede">
+          <strong>Salvar alterações</strong> já recalcula a ordem e os km
+          automaticamente (e lança o valor na conta do motoboy).
+        </p>
+      )}
 
+      <fieldset
+        disabled={locked}
+        style={{
+          border: 0,
+          margin: 0,
+          padding: 0,
+          minWidth: 0,
+          opacity: locked ? 0.72 : 1,
+        }}
+      >
       <div className="form-grid">
         <div className="field">
           <label htmlFor="start-mode">Ponto de partida</label>
@@ -606,11 +650,16 @@ export function RouteEditor({ data, date, onChange, actorName = "Admin" }: Props
             {status.text}
           </div>
         ) : null}
+      </div>
+      </fieldset>
 
         <RouteCompletionPanel
           route={saved}
           role="company"
           actorName={actorName}
+          assignedMotoboyName={
+            data.motoboys.find((m) => m.id === saved.motoboyId)?.name || ""
+          }
           canComplete={
             Boolean(saved.startAddress.trim()) || saved.stops.length > 0
           }
@@ -621,7 +670,6 @@ export function RouteEditor({ data, date, onChange, actorName = "Admin" }: Props
             });
           }}
         />
-      </div>
     </section>
   );
 }

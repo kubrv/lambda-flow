@@ -7,6 +7,8 @@ type Props = {
   route: DayRoute;
   role: Role;
   actorName: string;
+  /** Nome do motoboy atribuído à rota (para sinalizar quem concluiu). */
+  assignedMotoboyName?: string;
   /** Só permite concluir se a rota tiver conteúdo. */
   canComplete: boolean;
   onUpdate: (next: DayRoute) => void;
@@ -20,6 +22,7 @@ export function RouteCompletionPanel({
   route,
   role,
   actorName,
+  assignedMotoboyName = "",
   canComplete,
   onUpdate,
 }: Props) {
@@ -29,20 +32,28 @@ export function RouteCompletionPanel({
   const [msg, setMsg] = useState("");
 
   const isAdmin = role === "company";
+  const completedByName =
+    route.motoboyCompletedBy ||
+    assignedMotoboyName ||
+    (role === "motoboy" ? actorName : "") ||
+    "";
 
   function markCompletedByBoy() {
     if (!canComplete) {
       setMsg("Monte a rota antes de marcar como concluída.");
       return;
     }
+    const who =
+      (role === "motoboy" ? actorName : assignedMotoboyName || actorName) ||
+      "Motoboy";
     onUpdate({
       ...route,
       completionStatus: "completed",
       motoboyReport: boyDraft.trim(),
       motoboyCompletedAt: new Date().toISOString(),
-      motoboyCompletedBy: actorName || "Motoboy",
+      motoboyCompletedBy: who,
     });
-    setMsg("Rota concluída. Aguardando verificação do administrador.");
+    setMsg(`Rota concluída por ${who}. Aguardando verificação do administrador.`);
   }
 
   function markVerifiedByAdmin(opts?: {
@@ -70,6 +81,7 @@ export function RouteCompletionPanel({
         route.motoboyCompletedAt || new Date().toISOString(),
       motoboyCompletedBy:
         route.motoboyCompletedBy ||
+        assignedMotoboyName ||
         (status === "open" ? actorName || "Admin" : route.motoboyCompletedBy),
     });
     setMsg("Rota verificada e concluída pelo administrador.");
@@ -88,15 +100,18 @@ export function RouteCompletionPanel({
     });
     setBoyDraft("");
     setAdminDraft("");
-    setMsg("Conclusão reaberta.");
+    setMsg("Conclusão reaberta — edição da rota liberada.");
   }
 
   const badge =
     status === "verified" ? (
-      <span className="route-status-badge verified">Concluída · verificada</span>
+      <span className="route-status-badge verified">
+        Concluída · verificada
+        {completedByName ? ` · ${completedByName}` : ""}
+      </span>
     ) : status === "completed" ? (
       <span className="route-status-badge pending">
-        Concluída · aguarda verificação
+        Concluída por {completedByName || "motoboy"} · aguarda verificação
       </span>
     ) : (
       <span className="route-status-badge open">Em andamento</span>
@@ -108,6 +123,15 @@ export function RouteCompletionPanel({
         <h3>Conclusão da rota</h3>
         {badge}
       </div>
+
+      {status !== "open" && completedByName ? (
+        <div className="status ok" style={{ marginTop: "0.5rem" }}>
+          Marcada como concluída por <strong>{completedByName}</strong>
+          {route.motoboyCompletedAt
+            ? ` · ${new Date(route.motoboyCompletedAt).toLocaleString("pt-BR")}`
+            : ""}
+        </div>
+      ) : null}
 
       {status !== "open" && route.motoboyReport ? (
         <div className="report-box boy">
@@ -193,8 +217,9 @@ export function RouteCompletionPanel({
       {status === "completed" && isAdmin ? (
         <div className="form-grid" style={{ marginTop: "0.75rem" }}>
           <p className="hint">
-            Leia o relatório do motoboy acima. Você pode acrescentar o seu
-            (opcional) e marcar como verificado.
+            Concluída por <strong>{completedByName || "motoboy"}</strong>. Leia o
+            relatório acima, acrescente o seu (opcional) e marque como
+            verificada.
           </p>
           <div className="field">
             <label htmlFor="admin-report">Relatório do administrador (opcional)</label>
@@ -223,7 +248,9 @@ export function RouteCompletionPanel({
 
       {status === "completed" && role === "motoboy" ? (
         <p className="hint" style={{ marginTop: "0.65rem" }}>
-          Seu relatório foi enviado. O administrador ainda precisa verificar.
+          Concluída por você
+          {completedByName ? ` (${completedByName})` : ""}. O administrador ainda
+          precisa verificar.
         </p>
       ) : null}
 

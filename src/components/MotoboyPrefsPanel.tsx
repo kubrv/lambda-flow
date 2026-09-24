@@ -95,6 +95,14 @@ export function MotoboyPrefsPanel({ data, motoboyId, onChange }: Props) {
 
   return (
     <>
+      <section className="panel" style={{ marginTop: "0" }}>
+        <h2>Meu perfil</h2>
+        <p className="lede">
+          Preferências de pagamento e senha. Volte às rotas pelo menu{" "}
+          <strong>ver rotas</strong>.
+        </p>
+      </section>
+
       <section className="panel" style={{ marginTop: "1rem" }}>
         <h2>Preferências de pagamento</h2>
         <p className="lede">

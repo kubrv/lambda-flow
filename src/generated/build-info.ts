@@ -1,10 +1,10 @@
 /* Gerado automaticamente no build — não edite. */
 export const BUILD_INFO = {
-  version: "2026.09.24-de95f60",
-  display: "0.2.0+de95f60",
-  commit: "de95f60",
-  commitFull: "de95f605a12b5ceb5236d1bb1385d5ed45653c0f",
-  message: "Simplify motoboy login to first-access only and reset accounts.",
-  builtAt: "2026-09-24T00:49:01.643Z",
+  version: "2026.09.24-a119aa7",
+  display: "0.2.0+a119aa7",
+  commit: "a119aa7",
+  commitFull: "a119aa7046386431cb499788501fc1f09408fe31",
+  message: "Let admin create motoboy passwords and boys change theirs in profile.",
+  builtAt: "2026-09-24T01:15:08.579Z",
   packageVersion: "0.2.0",
 } as const;

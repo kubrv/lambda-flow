@@ -6,8 +6,10 @@ type Props = {
   onSignOut?: () => void;
   onOpenAdmin?: () => void;
   onOpenPublic?: () => void;
+  onOpenProfile?: () => void;
   showAdminLink?: boolean;
-  view?: "public" | "admin";
+  showProfileLink?: boolean;
+  view?: "public" | "admin" | "profile";
 };
 
 export function Header({
@@ -15,7 +17,9 @@ export function Header({
   onSignOut,
   onOpenAdmin,
   onOpenPublic,
+  onOpenProfile,
   showAdminLink,
+  showProfileLink,
   view = "public",
 }: Props) {
   return (
@@ -30,6 +34,17 @@ export function Header({
       </div>
 
       <div className="admin-pill">
+        {showProfileLink ? (
+          view === "profile" ? (
+            <button type="button" onClick={onOpenPublic}>
+              ver rotas
+            </button>
+          ) : (
+            <button type="button" onClick={onOpenProfile}>
+              perfil
+            </button>
+          )
+        ) : null}
         {showAdminLink ? (
           view === "admin" ? (
             <button type="button" onClick={onOpenPublic}>

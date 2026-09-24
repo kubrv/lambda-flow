@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Lambda-Flow — wordmark only (pacote lambda-strike) -->
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 96" role="img" aria-label="Lambda-Flow">
-  <title>Lambda-Flow</title>
+<!-- Lambda-Flow — wordmark (estilo Lambda-Strike / Orbitron) -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 96" role="img" aria-label="Lambda-Flow wordmark">
+  <title>Lambda-Flow Wordmark</title>
   <text
     x="0" y="68"
     fill="#E8FBFF"

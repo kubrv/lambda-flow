@@ -35,7 +35,7 @@ export default function App() {
   const [date, setDate] = useState(today);
   const [year, setYear] = useState(todayDate.getFullYear());
   const [monthIndex, setMonthIndex] = useState(todayDate.getMonth());
-  const [view, setView] = useState<"public" | "admin">("public");
+  const [view, setView] = useState<"public" | "admin" | "profile">("public");
   const [adminTab, setAdminTab] = useState<AdminTab>("rotas");
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -243,9 +243,11 @@ export default function App() {
             : `${profile.fullName || "Motoboy"} · rotas`
         }
         showAdminLink={isCompany}
+        showProfileLink={!isCompany}
         view={view}
         onOpenAdmin={() => setView("admin")}
         onOpenPublic={() => setView("public")}
+        onOpenProfile={() => setView("profile")}
         onSignOut={() => void handleSignOut()}
       />
 
@@ -269,6 +271,12 @@ export default function App() {
           onMonthChange={changeMonth}
           onBackToRoutes={() => setView("public")}
           onRefreshCompany={() => void refreshAuth()}
+        />
+      ) : !isCompany && view === "profile" ? (
+        <MotoboyPrefsPanel
+          data={data}
+          motoboyId={profile.motoboyId}
+          onChange={setData}
         />
       ) : (
         <>
@@ -294,13 +302,6 @@ export default function App() {
               });
             }}
           />
-          {!isCompany ? (
-            <MotoboyPrefsPanel
-              data={data}
-              motoboyId={profile.motoboyId}
-              onChange={setData}
-            />
-          ) : null}
         </>
       )}
       <WhatsAppFloat />

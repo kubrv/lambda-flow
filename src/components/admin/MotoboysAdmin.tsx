@@ -78,6 +78,7 @@ function applyDraft(m: Motoboy, d: Draft, parsePrice: (s: string) => number): Mo
 
 export function MotoboysAdmin({ data, onChange }: Props) {
   const [draft, setDraft] = useState<Draft>(emptyDraft);
+  const [showAdd, setShowAdd] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [edit, setEdit] = useState<Draft>(emptyDraft);
   const [msg, setMsg] = useState("");
@@ -106,8 +107,9 @@ export function MotoboysAdmin({ data, onChange }: Props) {
     );
     onChange({ ...data, motoboys: [...data.motoboys, motoboy] });
     setDraft(emptyDraft());
+    setShowAdd(false);
     setMsg(
-      "Motoboy cadastrado. Preencha e-mail/usuário e clique em «Gerar 1º acesso» para ele criar a senha.",
+      "Motoboy cadastrado. Preencha e-mail/usuário e clique em «Gerar 1º acesso» ou «Criar senha».",
     );
   }
 
@@ -317,6 +319,8 @@ export function MotoboysAdmin({ data, onChange }: Props) {
             value={value.email}
             onChange={(e) => setValue({ ...value, email: e.target.value })}
             placeholder="motoboy@email.com"
+            autoComplete="off"
+            name={`${idPrefix}-email`}
           />
         </div>
         <div className="field">
@@ -419,6 +423,17 @@ export function MotoboysAdmin({ data, onChange }: Props) {
       <div className="row-actions" style={{ marginBottom: "0.75rem" }}>
         <button
           type="button"
+          className="btn primary"
+          onClick={() => {
+            setShowAdd((v) => !v);
+            setErr("");
+            setMsg("");
+          }}
+        >
+          {showAdd ? "Fechar formulário" : "Adicionar motoboy"}
+        </button>
+        <button
+          type="button"
           className="btn danger ghost"
           disabled={busyId === "__reset__"}
           onClick={() => void wipeLogins()}
@@ -430,12 +445,26 @@ export function MotoboysAdmin({ data, onChange }: Props) {
       </div>
 
       <div className="form-grid">
-        {profileFields(draft, setDraft, "m")}
-        <div className="row-actions">
-          <button type="button" className="btn primary" onClick={add}>
-            Adicionar motoboy
-          </button>
-        </div>
+        {showAdd ? (
+          <>
+            {profileFields(draft, setDraft, "m")}
+            <div className="row-actions">
+              <button type="button" className="btn primary" onClick={add}>
+                Salvar motoboy
+              </button>
+              <button
+                type="button"
+                className="btn"
+                onClick={() => {
+                  setShowAdd(false);
+                  setDraft(emptyDraft());
+                }}
+              >
+                Cancelar
+              </button>
+            </div>
+          </>
+        ) : null}
         {msg ? <div className="status ok">{msg}</div> : null}
         {err ? <div className="status err">{err}</div> : null}
 

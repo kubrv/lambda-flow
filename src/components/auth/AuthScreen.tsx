@@ -165,13 +165,21 @@ export function AuthScreen({
           </div>
         ) : null}
 
-        <div className="form-grid">
+        <form
+          className="form-grid"
+          autoComplete="off"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void submit();
+          }}
+        >
           <div className="field">
             <label>
               {role === "motoboy" ? "Usuário ou e-mail" : "E-mail"}
             </label>
             <input
-              type={role === "company" ? "email" : "text"}
+              type="text"
+              name={role === "motoboy" ? "lf-moto-login" : "lf-company-login"}
               value={role === "motoboy" ? login : email}
               onChange={(e) =>
                 role === "motoboy"
@@ -181,7 +189,11 @@ export function AuthScreen({
               placeholder={
                 role === "motoboy" ? "usuario ou seu@email.com" : "seu@email.com"
               }
-              autoComplete={role === "motoboy" ? "username" : "email"}
+              autoComplete="off"
+              autoCapitalize="off"
+              autoCorrect="off"
+              spellCheck={false}
+              inputMode={role === "company" ? "email" : "text"}
             />
           </div>
 
@@ -189,10 +201,11 @@ export function AuthScreen({
             <div className="field">
               <label>Código de 1º acesso</label>
               <input
+                name="lf-access-code"
                 value={accessCode}
                 onChange={(e) => setAccessCode(e.target.value.toUpperCase())}
                 placeholder="Código que a empresa passou"
-                autoComplete="one-time-code"
+                autoComplete="off"
               />
               <p className="hint">
                 Só você cria a senha. A empresa pode alterar depois, mas nunca vê
@@ -209,20 +222,18 @@ export function AuthScreen({
             </label>
             <input
               type="password"
+              name="lf-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="••••••••"
-              autoComplete={
-                mode === "login" ? "current-password" : "new-password"
-              }
+              autoComplete="new-password"
             />
           </div>
 
           <button
-            type="button"
+            type="submit"
             className="btn primary"
             disabled={busy || !loginReady}
-            onClick={() => void submit()}
           >
             {busy
               ? "Aguarde…"
@@ -238,7 +249,7 @@ export function AuthScreen({
               Obter um plano para minha empresa
             </button>
           ) : null}
-        </div>
+        </form>
       </div>
     </div>
   );
