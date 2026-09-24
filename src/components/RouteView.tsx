@@ -1,49 +1,126 @@
 import { formatKm } from "../lib/geo";
+import { formatDateLabel } from "../lib/dates";
+import { formatHoursLabel, normalizeHoursPeriods } from "../lib/hours";
+import {
+  formatMoneyBRL,
+  motoboyStopTitle,
+  resolveMotoboyPricePerKm,
+} from "../lib/labels";
 import {
   googleMapsDirectionsUrl,
+  googleMapsNavigateToUrl,
+  pointFromCoords,
   wazeNavigateUrl,
 } from "../lib/mapsLinks";
-import type { DayRoute, Motoboy, Weekday } from "../lib/types";
-import { WEEKDAYS } from "../lib/types";
+import { printDayRoutePdf } from "../lib/printRoutePdf";
+import type { DayRoute, Motoboy } from "../lib/types";
+import {
+  DEFAULT_PRICE_PER_KM,
+  normalizeBoxes,
+  resolveStopKinds,
+  totalBoxes,
+} from "../lib/types";
 
 type Props = {
-  day: Weekday;
+  date: string;
   route: DayRoute;
   motoboys: Motoboy[];
+  /** Fallback legado se o motoboy não tiver preço. */
+  pricePerKm?: number;
 };
 
-export function RouteView({ day, route, motoboys }: Props) {
-  const dayLabel = WEEKDAYS.find((d) => d.id === day)?.label ?? day;
+export function RouteView({ date, route, motoboys, pricePerKm }: Props) {
+  const dayLabel = formatDateLabel(date);
   const motoboy = motoboys.find((m) => m.id === route.motoboyId);
+  const rate = resolveMotoboyPricePerKm(
+    motoboy,
+    pricePerKm || DEFAULT_PRICE_PER_KM,
+  );
   const hasStart = route.startAddress.trim().length > 0;
   const hasStops = route.stops.length > 0;
+  const estimatedFare = route.totalKm * rate;
+  const boxesSum = totalBoxes(route.stops);
+
+  const startPoint = pointFromCoords(
+    route.startLat,
+    route.startLng,
+    route.startAddress,
+  );
+
+  const stopPoints = route.stops.map((s) =>
+    pointFromCoords(s.lat, s.lng, s.address),
+  );
 
   const googleUrl =
     hasStart && hasStops
-      ? googleMapsDirectionsUrl(
-          route.startLat != null && route.startLng != null
-            ? { lat: route.startLat, lng: route.startLng }
-            : route.startAddress,
-          route.stops.map((s) =>
-            s.lat != null && s.lng != null
-              ? { lat: s.lat, lng: s.lng }
-              : s.address,
-          ),
-        )
+      ? googleMapsDirectionsUrl(startPoint, stopPoints, {
+          returnToStart: route.returnToStart,
+        })
       : null;
+
+  const firstStop = route.stops[0];
+  const firstWaze =
+    firstStop != null
+      ? wazeNavigateUrl(
+          pointFromCoords(firstStop.lat, firstStop.lng, firstStop.address),
+        )
+      : hasStart
+        ? wazeNavigateUrl(startPoint)
+        : null;
+
+  function handlePrintPdf() {
+    try {
+      printDayRoutePdf({ date, route, motoboys, pricePerKm: rate });
+    } catch (err) {
+      window.alert(
+        err instanceof Error ? err.message : "Não foi possível gerar o PDF.",
+      );
+    }
+  }
 
   return (
     <section className="panel">
       <h2>Rota · {dayLabel}</h2>
       <p className="lede">
-        Ordem otimizada a partir do ponto de partida. Abra no Google Maps ou
-        navegue parada a parada no Waze.
+        Ordem do dia. Use os botões grandes para abrir a rota completa ou
+        navegar parada a parada.
       </p>
+
+      {hasStart || hasStops ? (
+        <div className="route-nav-bar">
+          {googleUrl ? (
+            <a
+              className="btn primary route-nav-main"
+              href={googleUrl}
+              target="_blank"
+              rel="noreferrer"
+            >
+              Abrir rota completa no Google Maps
+            </a>
+          ) : null}
+          {firstWaze ? (
+            <a
+              className="btn btn-waze route-nav-main"
+              href={firstWaze}
+              target="_blank"
+              rel="noreferrer"
+            >
+              Waze · {firstStop ? "1ª parada" : "partida"}
+            </a>
+          ) : null}
+        </div>
+      ) : null}
 
       <div className="meta-grid">
         <div className="meta-card">
           <label>Motoboy</label>
-          <strong>{motoboy?.name ?? "Não atribuído"}</strong>
+          <strong>
+            {motoboy?.name ?? "Não atribuído"}
+            {motoboy?.company ? ` · ${motoboy.company}` : ""}
+          </strong>
+          {motoboy ? (
+            <span className="hint">{formatMoneyBRL(rate)}/km</span>
+          ) : null}
         </div>
         <div className="meta-card">
           <label>Total estimado</label>
@@ -51,14 +128,26 @@ export function RouteView({ day, route, motoboys }: Props) {
         </div>
         <div className="meta-card">
           <label>Paradas</label>
-          <strong>{route.stops.length}</strong>
+          <strong>
+            {route.stops.length}
+            {route.returnToStart ? " + retorno" : ""}
+          </strong>
+        </div>
+        <div className="meta-card">
+          <label>Valor estimado</label>
+          <strong>{formatMoneyBRL(estimatedFare)}</strong>
         </div>
       </div>
 
-      {!hasStart && !hasStops ? (
-        <div className="empty">
-          Nenhuma rota montada para este dia ainda.
+      {hasStops ? (
+        <div className="boxes-total-banner" role="status">
+          <span>Total de caixas</span>
+          <strong className="boxes-qty">{boxesSum}</strong>
         </div>
+      ) : null}
+
+      {!hasStart && !hasStops ? (
+        <div className="empty">Nenhuma rota montada para este dia ainda.</div>
       ) : (
         <>
           <div className="stops" style={{ marginBottom: "0.85rem" }}>
@@ -70,37 +159,108 @@ export function RouteView({ day, route, motoboys }: Props) {
               </div>
               <div className="stop-actions">
                 {hasStart ? (
-                  <a
-                    className="btn"
-                    href={wazeNavigateUrl(
-                      route.startLat != null && route.startLng != null
-                        ? { lat: route.startLat, lng: route.startLng }
-                        : route.startAddress,
-                    )}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    Waze
-                  </a>
+                  <>
+                    <a
+                      className="btn btn-maps"
+                      href={googleMapsNavigateToUrl(startPoint)}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      Maps
+                    </a>
+                    <a
+                      className="btn btn-waze"
+                      href={wazeNavigateUrl(startPoint)}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      Waze
+                    </a>
+                  </>
                 ) : null}
               </div>
             </div>
 
-            {route.stops.map((stop, index) => (
-              <div className="stop" key={stop.id}>
-                <div className="stop-index">{index + 1}</div>
+            {route.stops.map((stop, index) => {
+              const kinds = resolveStopKinds(stop);
+              const boxes = normalizeBoxes(stop.boxes);
+              const point = pointFromCoords(stop.lat, stop.lng, stop.address);
+              return (
+                <div className="stop" key={stop.id}>
+                  <div className="stop-index">{index + 1}</div>
+                  <div className="stop-body">
+                    <strong>
+                      {motoboyStopTitle(index, stop.label, stop.address)}
+                    </strong>
+                    <p>{stop.address}</p>
+                    {stop.complement?.trim() ? (
+                      <p className="stop-complement">
+                        <strong>Complemento:</strong> {stop.complement.trim()}
+                      </p>
+                    ) : null}
+                    <p className="stop-hours">
+                      <strong>Horário:</strong>{" "}
+                      {formatHoursLabel(normalizeHoursPeriods(stop.hours))}
+                    </p>
+                    <div className="kind-badges">
+                      {kinds.includes("entrega") ? (
+                        <span className="kind-badge entrega">Entrega</span>
+                      ) : null}
+                      {kinds.includes("retirada") ? (
+                        <span className="kind-badge retirada">Retirada</span>
+                      ) : null}
+                      <span className="boxes-qty">
+                        {boxes} {boxes === 1 ? "caixa" : "caixas"}
+                      </span>
+                    </div>
+                    {stop.notes?.trim() ? (
+                      <p className="stop-notes">
+                        <strong>Obs:</strong> {stop.notes.trim()}
+                      </p>
+                    ) : null}
+                  </div>
+                  <div className="stop-actions">
+                    <a
+                      className="btn btn-maps"
+                      href={googleMapsNavigateToUrl(point)}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      Maps
+                    </a>
+                    <a
+                      className="btn btn-waze"
+                      href={wazeNavigateUrl(point)}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      Waze
+                    </a>
+                  </div>
+                </div>
+              );
+            })}
+
+            {route.returnToStart && hasStart ? (
+              <div className="stop">
+                <div className="stop-index">R</div>
                 <div className="stop-body">
-                  <strong>{stop.label || `Parada ${index + 1}`}</strong>
-                  <p>{stop.address}</p>
+                  <strong>Retorno ao ponto de partida</strong>
+                  <p>{route.startAddress}</p>
+                  <span className="kind-badge retorno">Retorno</span>
                 </div>
                 <div className="stop-actions">
                   <a
-                    className="btn"
-                    href={wazeNavigateUrl(
-                      stop.lat != null && stop.lng != null
-                        ? { lat: stop.lat, lng: stop.lng }
-                        : stop.address,
-                    )}
+                    className="btn btn-maps"
+                    href={googleMapsNavigateToUrl(startPoint)}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Maps
+                  </a>
+                  <a
+                    className="btn btn-waze"
+                    href={wazeNavigateUrl(startPoint)}
                     target="_blank"
                     rel="noreferrer"
                   >
@@ -108,20 +268,37 @@ export function RouteView({ day, route, motoboys }: Props) {
                   </a>
                 </div>
               </div>
-            ))}
+            ) : null}
           </div>
 
-          <div className="row-actions">
+          {route.totalKm > 0 ? (
+            <div className="fare-box">
+              <p>
+                <strong>Valor estimado da rota:</strong>{" "}
+                {formatMoneyBRL(estimatedFare)} ({formatKm(route.totalKm)} ×{" "}
+                {formatMoneyBRL(rate)}/km)
+              </p>
+              <p className="hint">
+                Este valor é apenas uma estimativa. O valor real no fim da
+                corrida pode ser diferente.
+              </p>
+            </div>
+          ) : null}
+
+          <div className="route-nav-bar bottom">
             {googleUrl ? (
               <a
-                className="btn primary"
+                className="btn primary route-nav-main"
                 href={googleUrl}
                 target="_blank"
                 rel="noreferrer"
               >
-                Abrir rota no Google Maps
+                Abrir rota completa no Google Maps
               </a>
             ) : null}
+            <button type="button" className="btn" onClick={handlePrintPdf}>
+              PDF com botões Maps/Waze
+            </button>
             {route.optimizedAt ? (
               <span className="hint">
                 Última otimização:{" "}

@@ -1,35 +1,54 @@
 # Lambda-Flow
 
-Sistema web para organizar rotas diárias de motoboys, com ordenação automática a partir do ponto de partida, atribuição de responsável, total de km e links para **Google Maps** e **Waze**.
+Rotas diárias para motoboys — **Vercel** + **Supabase**, com km calculados pelas ruas.
 
-## Como rodar
+## Stack
+
+- Frontend: Vite + React (hospedado na Vercel)
+- Banco: Supabase (`motoboys`, `day_routes`, `coord_cache`)
+- Km / ordem: OSRM (rotas de carro) + OpenStreetMap/Nominatim (geocoding)
+- Sem API key do Google
+
+## Setup Supabase
+
+1. Crie um projeto em [supabase.com](https://supabase.com)
+2. SQL Editor → rode `supabase/schema.sql`
+3. Depois rode `supabase/seed.sql` (rota de terça de exemplo)
+4. Em **Project Settings → API**, copie:
+   - Project URL → `VITE_SUPABASE_URL`
+   - anon public → `VITE_SUPABASE_ANON_KEY`
+
+## Deploy Vercel
 
 ```bash
+npm install
+npx vercel
+```
+
+No painel da Vercel, adicione:
+
+| Variável | Onde |
+|----------|------|
+| `VITE_SUPABASE_URL` | Production / Preview |
+| `VITE_SUPABASE_ANON_KEY` | Production / Preview |
+
+Redeploy depois de salvar as envs.
+
+## Admin
+
+Clique **5 vezes** no logo para abrir o painel.
+
+## Dev local (com Supabase na nuvem)
+
+```bash
+cp .env.example .env
+# preencha as chaves
 npm install
 npm run dev
 ```
 
-Abra o endereço do Vite (geralmente `http://localhost:5173`).
+A API `/api/optimize-route` no `vite dev` precisa do `vercel dev` se for testar o cálculo de km localmente:
 
-## Acesso admin
-
-Clique **5 vezes** no logo (badge) no topo do site. O modo admin fica ativo só na sessão do navegador.
-
-## O que a v1 faz
-
-- Seleção do dia da semana
-- Cadastro de motoboys
-- Inserção em lote de endereços (um por linha)
-- Geocoding via OpenStreetMap Nominatim
-- Ordenação automática (nearest-neighbor + 2-opt)
-- Total estimado de km (Haversine)
-- Link da rota completa no Google Maps
-- Links Waze por parada
-
-## Marca
-
-Visual baseado no pacote **lambda-strike** (`#38E8FF`, `#031018`, Orbitron / Manrope).
-
-## Observação sobre Waze / Maps
-
-O Waze não oferece API pública completa de roteamento multi-parada. A v1 otimiza a ordem localmente e gera deep links para navegação. Em versões futuras dá para plugar Google Directions / Distance Matrix com API key para km de rua e otimização oficial.
+```bash
+npx vercel dev
+```

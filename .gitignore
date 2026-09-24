@@ -7,5 +7,10 @@ dist-ssr
 !.env.example
 .DS_Store
 Thumbs.db
+.vercel
+data/store.json
+data/store.json.tmp
 .vscode/*
 !.vscode/extensions.json
+
+.vercel

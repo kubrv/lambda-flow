@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
+<!-- Lambda-Flow — lockup horizontal (badge + wordmark) do pacote lambda-strike -->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 128" role="img" aria-label="Lambda-Flow">
   <title>Lambda-Flow</title>
   <defs>
@@ -27,5 +28,5 @@
     font-size="18"
     font-weight="600"
     letter-spacing="1"
-  >Rotas para motoboys</text>
+  >Rotas · Maps · Waze</text>
 </svg>

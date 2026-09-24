@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Lambda-Flow — wordmark only (pacote lambda-strike) -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 560 96" role="img" aria-label="Lambda-Flow">
+  <title>Lambda-Flow</title>
+  <text
+    x="0" y="68"
+    fill="#E8FBFF"
+    font-family="Orbitron, Manrope, Segoe UI, Arial, sans-serif"
+    font-size="56"
+    font-weight="800"
+    letter-spacing="2.2"
+  >Lambda-Flow</text>
+</svg>
