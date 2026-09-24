@@ -33,6 +33,7 @@ import {
   totalBoxes,
 } from "../../lib/types";
 import { RouteCompletionPanel } from "../RouteCompletionPanel";
+import { AddressLookupField } from "./AddressLookupField";
 
 type Props = {
   data: AppData;
@@ -583,24 +584,46 @@ export function RouteEditor({ data, date, onChange, actorName = "Admin" }: Props
             }}
           >
             <option value="default">Padrão: {preset.address}</option>
-            <option value="manual">Outro endereço (manual)</option>
+            <option value="manual">Buscar outro endereço</option>
           </select>
         </div>
 
         {startMode === "manual" ? (
           <div className="field">
-            <label htmlFor="start">Endereço de partida</label>
-            <input
-              id="start"
-              value={startAddress}
-              onChange={(e) => {
-                setStartAddress(e.target.value);
-                setStartLat(null);
-                setStartLng(null);
+            <label>Endereço de partida</label>
+            <AddressLookupField
+              idPrefix={`route-start-${date}`}
+              initialAddress={startAddress}
+              initialLat={startLat}
+              initialLng={startLng}
+              resetKey={`${date}-${formEpoch}-${startMode}`}
+              onResolved={(place) => {
+                if (!place) {
+                  setStartLat(null);
+                  setStartLng(null);
+                  return;
+                }
+                setStartAddress(place.address);
+                setStartLat(place.lat);
+                setStartLng(place.lng);
               }}
             />
+            {startAddress.trim() && startLat != null && startLng != null ? (
+              <p className="hint" style={{ marginTop: "0.45rem" }}>
+                Partida desta rota: <strong>{startAddress}</strong>
+              </p>
+            ) : (
+              <p className="hint" style={{ marginTop: "0.45rem" }}>
+                Digite a rua ou cole um link do Maps e confirme o ponto.
+              </p>
+            )}
           </div>
-        ) : null}
+        ) : (
+          <p className="hint">
+            Usando a partida padrão. Para outro lugar, escolha{" "}
+            <strong>Outro endereço</strong> e busque no mapa.
+          </p>
+        )}
 
         <div className="field">
           <label htmlFor="motoboy">Motoboy (obrigatório)</label>

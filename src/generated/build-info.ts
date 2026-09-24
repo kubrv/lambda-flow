@@ -1,10 +1,10 @@
 /* Gerado automaticamente no build — não edite. */
 export const BUILD_INFO = {
-  version: "2026.09.24-476b33b",
-  display: "0.2.0+476b33b",
-  commit: "476b33b",
-  commitFull: "476b33bddad2e904dd059b4f120b3b837b6aa97b",
-  message: "Improve address admin UX: sort, inactivate, clearer company panel.",
-  builtAt: "2026-09-24T19:30:55.988Z",
+  version: "2026.09.24-0f7cf1f",
+  display: "0.2.0+0f7cf1f",
+  commit: "0f7cf1f",
+  commitFull: "0f7cf1ff7d65155ae86973c5288b7b1096687151",
+  message: "Stop auto-save from deleting addresses and other catalog data.",
+  builtAt: "2026-09-24T19:57:13.134Z",
   packageVersion: "0.2.0",
 } as const;
