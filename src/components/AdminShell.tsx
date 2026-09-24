@@ -56,15 +56,22 @@ export function AdminShell({
 }: Props) {
   return (
     <div className="admin-shell">
+      <div className="admin-mode-banner" role="status">
+        <span className="admin-mode-badge">Modo administrador</span>
+        <span className="admin-mode-company">
+          Empresa: <strong>{company?.name || "—"}</strong>
+        </span>
+      </div>
       <div className="admin-shell-head">
         <div>
-          <h1>Painel · {company?.name || "Empresa"}</h1>
+          <h1>Painel da empresa · {company?.name || "Empresa"}</h1>
           <p className="lede" style={{ margin: 0 }}>
-            Administração da empresa — sem precisar dos 5 cliques no logo.
+            Você está no painel administrador — cadastre endereços, rotas,
+            motoboys e financeiro desta empresa.
           </p>
         </div>
         <button type="button" className="btn" onClick={onBackToRoutes}>
-          Ver rotas
+          Visualizar rotas como motoboy
         </button>
       </div>
 

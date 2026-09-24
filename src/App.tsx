@@ -239,7 +239,9 @@ export default function App() {
       <Header
         subtitle={
           isCompany
-            ? `${company?.name || "Empresa"} · admin`
+            ? view === "admin"
+              ? `${company?.name || "Empresa"} · painel administrador`
+              : `${company?.name || "Empresa"} · visão motoboy`
             : `${profile.fullName || "Motoboy"} · rotas`
         }
         showAdminLink={isCompany}

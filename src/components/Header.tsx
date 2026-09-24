@@ -32,7 +32,7 @@ export function Header({
         {showProfileLink ? (
           view === "profile" ? (
             <button type="button" onClick={onOpenPublic}>
-              ver rotas
+              Visualizar rotas como motoboy
             </button>
           ) : (
             <button type="button" onClick={onOpenProfile}>
@@ -43,11 +43,11 @@ export function Header({
         {showAdminLink ? (
           view === "admin" ? (
             <button type="button" onClick={onOpenPublic}>
-              ver rotas
+              Visualizar rotas como motoboy
             </button>
           ) : (
             <button type="button" onClick={onOpenAdmin}>
-              painel
+              painel admin
             </button>
           )
         ) : null}

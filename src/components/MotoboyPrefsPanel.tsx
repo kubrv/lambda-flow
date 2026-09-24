@@ -99,7 +99,7 @@ export function MotoboyPrefsPanel({ data, motoboyId, onChange }: Props) {
         <h2>Meu perfil</h2>
         <p className="lede">
           Preferências de pagamento e senha. Volte às rotas pelo menu{" "}
-          <strong>ver rotas</strong>.
+          <strong>Visualizar rotas como motoboy</strong>.
         </p>
       </section>
 

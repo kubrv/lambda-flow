@@ -1,6 +1,7 @@
 import {
   dateKeysInMonth,
   formatDateShort,
+  localDateKey,
   monthLabel,
   shiftMonth,
   weekdayFromDateKey,
@@ -28,6 +29,7 @@ export function MonthCalendar({
   const keys = dateKeysInMonth(year, monthIndex);
   const firstWeekdayJs = new Date(year, monthIndex, 1).getDay();
   const pad = (firstWeekdayJs + 6) % 7;
+  const today = localDateKey();
 
   return (
     <div className="month-cal">
@@ -71,13 +73,15 @@ export function MonthCalendar({
           );
           const dayNum = Number(key.slice(-2));
           const wd = WEEKDAYS.find((w) => w.id === weekdayFromDateKey(key));
+          const isPast = key < today;
+          const isToday = key === today;
           return (
             <button
               key={key}
               type="button"
               className={`month-day${selectedDate === key ? " active" : ""}${
                 hasRoute ? " has-route" : ""
-              }${
+              }${isPast ? " past" : ""}${isToday ? " today" : ""}${
                 hasRoute && route.completionStatus === "verified"
                   ? " verified"
                   : hasRoute && route.completionStatus === "completed"

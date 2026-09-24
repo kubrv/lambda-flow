@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   geocodeAddressApi,
   geocodeSuggestions,
@@ -31,6 +31,7 @@ type Props = {
 };
 
 type InputMode = "typed" | "link";
+type SortMode = "added" | "alpha";
 
 type VerifyState =
   | { status: "idle" }
@@ -88,6 +89,10 @@ function splitStoredAddress(address: string): {
 }
 
 export function AddressesAdmin({ data, onChange }: Props) {
+  const [showAdd, setShowAdd] = useState(false);
+  const [sortMode, setSortMode] = useState<SortMode>("added");
+  const [listFilter, setListFilter] = useState("");
+  const [showInactive, setShowInactive] = useState(false);
   const [mode, setMode] = useState<InputMode>("typed");
   const [label, setLabel] = useState("");
   const [street, setStreet] = useState("");
@@ -279,6 +284,7 @@ export function AddressesAdmin({ data, onChange }: Props) {
       };
       onChange({ ...data, addresses, coordCache: cache });
       resetForm();
+      setShowAdd(false);
       setMsg("Endereço cadastrado. Pode abrir no Maps ou Waze na lista abaixo.");
     } finally {
       setBusy(false);
@@ -467,6 +473,16 @@ export function AddressesAdmin({ data, onChange }: Props) {
     if (editingId === id) cancelEdit();
   }
 
+  function setAddressActive(id: string, active: boolean) {
+    onChange({
+      ...data,
+      addresses: data.addresses.map((a) =>
+        a.id === id ? { ...a, active } : a,
+      ),
+    });
+    setMsg(active ? "Endereço reativado." : "Endereço inativado.");
+  }
+
   function onStreetPaste(text: string) {
     if (looksLikeMapsUrl(text)) {
       setMode("link");
@@ -483,14 +499,72 @@ export function AddressesAdmin({ data, onChange }: Props) {
     street.trim().length >= 3 || houseNumber.trim().length > 0;
   const canSearchLink = mapsLink.trim().length >= 12;
 
+  const listedAddresses = useMemo(() => {
+    const q = listFilter.trim().toLowerCase();
+    let list = [...data.addresses];
+    if (q) {
+      list = list.filter((a) => {
+        const nick = cleanNickname(a.label, a.address).toLowerCase();
+        return (
+          nick.includes(q) ||
+          a.address.toLowerCase().includes(q) ||
+          (a.complement || "").toLowerCase().includes(q)
+        );
+      });
+    } else if (!showInactive) {
+      list = list.filter((a) => a.active !== false);
+    } else {
+      list = list.filter((a) => a.active === false);
+    }
+    if (sortMode === "alpha") {
+      list.sort((a, b) =>
+        cleanNickname(a.label, a.address).localeCompare(
+          cleanNickname(b.label, b.address),
+          "pt-BR",
+          { sensitivity: "base" },
+        ),
+      );
+    } else {
+      // Ordem de adição: createdAt se houver, senão ordem do array (carga do banco)
+      list.sort((a, b) => {
+        const ta = a.createdAt ? Date.parse(a.createdAt) : 0;
+        const tb = b.createdAt ? Date.parse(b.createdAt) : 0;
+        if (ta && tb && ta !== tb) return ta - tb;
+        return (
+          data.addresses.findIndex((x) => x.id === a.id) -
+          data.addresses.findIndex((x) => x.id === b.id)
+        );
+      });
+    }
+    return list;
+  }, [data.addresses, listFilter, showInactive, sortMode]);
+
+  const inactiveCount = data.addresses.filter((a) => a.active === false).length;
+
   return (
     <section className="panel">
       <h2>Cadastro de endereços</h2>
       <p className="lede">
         Localize o ponto no mapa (rua/número ou link). Complemento e horário
-        são só para o motoboy — não interferem na pesquisa.
+        são só para o motoboy — não interferem na pesquisa. Endereços inativos
+        somem da rota, mas voltam na busca.
       </p>
 
+      <div className="row-actions" style={{ marginBottom: "0.75rem" }}>
+        <button
+          type="button"
+          className="btn primary"
+          onClick={() => {
+            setShowAdd((v) => !v);
+            setMsg("");
+          }}
+        >
+          {showAdd ? "Fechar cadastro" : "Cadastrar endereço"}
+        </button>
+      </div>
+
+      {showAdd ? (
+      <>
       <div className="mode-tabs" role="tablist" aria-label="Como informar o endereço">
         <button
           type="button"
@@ -668,13 +742,26 @@ export function AddressesAdmin({ data, onChange }: Props) {
           >
             Cadastrar
           </button>
+          <button
+            type="button"
+            className="btn"
+            onClick={() => {
+              setShowAdd(false);
+              resetForm();
+            }}
+          >
+            Cancelar
+          </button>
         </div>
+      </div>
+      </>
+      ) : null}
 
         {msg ? (
           <div
             className={`status ${
               /não|falha|maps|encontr|configur|informe|cole/i.test(msg) &&
-              !/cadastrado|atualizado/i.test(msg)
+              !/cadastrado|atualizado|inativ|reativ/i.test(msg)
                 ? "err"
                 : "ok"
             }`}
@@ -683,13 +770,80 @@ export function AddressesAdmin({ data, onChange }: Props) {
           </div>
         ) : null}
 
+        <div className="addr-list-toolbar">
+          <div className="field" style={{ flex: 1, minWidth: "12rem" }}>
+            <label htmlFor="addr-list-filter">Buscar na lista</label>
+            <input
+              id="addr-list-filter"
+              value={listFilter}
+              onChange={(e) => setListFilter(e.target.value)}
+              placeholder="Apelido, rua… (também acha inativos)"
+            />
+          </div>
+          <div className="field">
+            <label htmlFor="addr-sort">Ordenar</label>
+            <select
+              id="addr-sort"
+              value={sortMode}
+              onChange={(e) => setSortMode(e.target.value as SortMode)}
+            >
+              <option value="added">Ordem de adição</option>
+              <option value="alpha">Alfabética (apelido)</option>
+            </select>
+          </div>
+          <div className="field">
+            <label htmlFor="addr-inactive-toggle">Exibir</label>
+            <select
+              id="addr-inactive-toggle"
+              value={
+                listFilter.trim()
+                  ? "search"
+                  : showInactive
+                    ? "inactive"
+                    : "active"
+              }
+              onChange={(e) => {
+                const v = e.target.value;
+                if (v === "inactive") {
+                  setShowInactive(true);
+                  setListFilter("");
+                } else if (v === "active") {
+                  setShowInactive(false);
+                  setListFilter("");
+                }
+              }}
+              disabled={Boolean(listFilter.trim())}
+            >
+              <option value="active">Ativos</option>
+              <option value="inactive">
+                Inativos{inactiveCount ? ` (${inactiveCount})` : ""}
+              </option>
+              {listFilter.trim() ? (
+                <option value="search">Resultados da busca</option>
+              ) : null}
+            </select>
+          </div>
+        </div>
+
         <div className="motoboy-list">
-          {data.addresses.map((a) => {
+          {listedAddresses.length === 0 ? (
+            <div className="empty">
+              {listFilter.trim()
+                ? "Nenhum endereço encontrado na busca."
+                : showInactive
+                  ? "Nenhum endereço inativo."
+                  : "Nenhum endereço ativo. Cadastre ou busque inativos."}
+            </div>
+          ) : null}
+          {listedAddresses.map((a) => {
             const automatable = a.lat != null && a.lng != null;
             const point = pointFromCoords(a.lat, a.lng, a.address);
+            const isInactive = a.active === false;
             return (
-              <div className="motoboy-item finance-item" key={a.id}>
-                {editingId === a.id ? (
+              <div
+                className={`motoboy-item finance-item${isInactive ? " addr-inactive" : ""}`}
+                key={a.id}
+              >                {editingId === a.id ? (
                   <div className="form-grid" style={{ flex: 1, width: "100%" }}>
                     <div className="mode-tabs compact">
                       <button
@@ -823,6 +977,11 @@ export function AddressesAdmin({ data, onChange }: Props) {
                   <>
                     <div>
                       <strong>{cleanNickname(a.label, a.address)}</strong>
+                      {isInactive ? (
+                        <span className="addr-flag bad" style={{ marginLeft: "0.45rem" }}>
+                          Inativo
+                        </span>
+                      ) : null}
                       <div className="hint">{a.address}</div>
                       {a.complement?.trim() ? (
                         <div className="hint addr-complement">
@@ -877,6 +1036,23 @@ export function AddressesAdmin({ data, onChange }: Props) {
                       >
                         Editar
                       </button>
+                      {isInactive ? (
+                        <button
+                          type="button"
+                          className="btn primary"
+                          onClick={() => setAddressActive(a.id, true)}
+                        >
+                          Reativar
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          className="btn"
+                          onClick={() => setAddressActive(a.id, false)}
+                        >
+                          Inativar
+                        </button>
+                      )}
                       <button
                         type="button"
                         className="btn danger ghost"
@@ -891,7 +1067,6 @@ export function AddressesAdmin({ data, onChange }: Props) {
             );
           })}
         </div>
-      </div>
     </section>
   );
 }

@@ -52,6 +52,9 @@ export type SavedAddress = {
   hours?: HoursPeriod[];
   lat: number | null;
   lng: number | null;
+  /** false = inativo (escondido na rota; reativável na busca). */
+  active?: boolean;
+  createdAt?: string;
 };
 
 export type StopKind = "entrega" | "retirada";

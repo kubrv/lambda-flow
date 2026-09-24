@@ -214,6 +214,13 @@ a {
   cursor: pointer;
   padding: 0;
   margin-left: 0.2rem;
+  text-transform: none;
+  letter-spacing: 0.01em;
+  font-weight: 600;
+  font-size: 0.78rem;
+  max-width: 14rem;
+  text-align: right;
+  line-height: 1.2;
 }
 
 .day-tabs {
@@ -532,7 +539,7 @@ a {
   appearance: none;
   display: inline-flex;
   align-items: center;
-  gap: 0.25rem;
+  gap: 0.35rem;
   border: 1px solid rgba(56, 232, 255, 0.28);
   background: rgba(3, 16, 24, 0.75);
   color: var(--cyan);
@@ -544,6 +551,13 @@ a {
   white-space: nowrap;
 }
 
+.addr-expand-btn.big {
+  padding: 0.55rem 0.85rem;
+  font-size: 0.88rem;
+  min-height: 2.4rem;
+  border-width: 1.5px;
+}
+
 .addr-expand-btn:hover {
   border-color: rgba(56, 232, 255, 0.55);
   background: rgba(56, 232, 255, 0.08);
@@ -552,6 +566,28 @@ a {
 .addr-expand-btn.open {
   border-color: rgba(56, 232, 255, 0.55);
   background: rgba(56, 232, 255, 0.12);
+}
+
+.addr-expand-chevron {
+  font-size: 1.05em;
+  line-height: 1;
+}
+
+.addr-list-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: end;
+  margin: 0.75rem 0 0.85rem;
+}
+
+.addr-inactive {
+  opacity: 0.72;
+  border-color: rgba(240, 160, 32, 0.35);
+}
+
+.address-check-row.addr-inactive {
+  opacity: 0.78;
 }
 
 .addr-extra-hint {
@@ -958,6 +994,27 @@ a {
   pointer-events: none;
 }
 
+.month-day.past {
+  background: rgba(0, 0, 0, 0.38);
+  color: rgba(200, 220, 230, 0.45);
+  border-color: rgba(255, 255, 255, 0.04);
+}
+
+.month-day.past .day-num {
+  color: rgba(180, 200, 210, 0.42);
+}
+
+.month-day.past:hover {
+  background: rgba(0, 0, 0, 0.48);
+  border-color: rgba(255, 255, 255, 0.1);
+  color: rgba(210, 225, 235, 0.65);
+}
+
+.month-day.today:not(.active) {
+  border-color: rgba(56, 232, 255, 0.35);
+  box-shadow: inset 0 0 0 1px rgba(56, 232, 255, 0.12);
+}
+
 .month-day:hover {
   border-color: var(--line);
   background: rgba(56, 232, 255, 0.06);
@@ -966,6 +1023,16 @@ a {
 .month-day.active {
   border-color: rgba(56, 232, 255, 0.55);
   background: rgba(56, 232, 255, 0.12);
+  color: var(--text);
+}
+
+.month-day.past.active {
+  background: rgba(56, 232, 255, 0.14);
+  color: var(--text);
+}
+
+.month-day.past.active .day-num {
+  color: var(--text);
 }
 
 .month-day.has-route .dot {
@@ -1077,6 +1144,45 @@ a {
   justify-content: space-between;
   align-items: flex-start;
   margin-bottom: 1rem;
+}
+
+.admin-mode-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.65rem 1rem;
+  margin-bottom: 0.85rem;
+  padding: 0.65rem 0.9rem;
+  border-radius: 12px;
+  border: 1px solid rgba(56, 232, 255, 0.4);
+  background: linear-gradient(
+    105deg,
+    rgba(56, 232, 255, 0.14),
+    rgba(3, 16, 24, 0.55)
+  );
+}
+
+.admin-mode-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.28rem 0.65rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #031018;
+  background: #38e8ff;
+}
+
+.admin-mode-company {
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.admin-mode-company strong {
+  color: var(--text);
+  font-weight: 700;
 }
 
 .admin-shell-head h1 {

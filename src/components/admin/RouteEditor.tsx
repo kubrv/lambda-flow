@@ -90,6 +90,7 @@ export function RouteEditor({ data, date, onChange, actorName = "Admin" }: Props
   const [stopBoxes, setStopBoxes] = useState<Record<string, number>>({});
   const [returnToStart, setReturnToStart] = useState(true);
   const [filter, setFilter] = useState("");
+  const [addrSort, setAddrSort] = useState<"added" | "alpha">("added");
   const [status, setStatus] = useState<Status>({ kind: "idle", text: "" });
   const [formEpoch, setFormEpoch] = useState(0);
   const [liveKm, setLiveKm] = useState(0);
@@ -150,14 +151,41 @@ export function RouteEditor({ data, date, onChange, actorName = "Admin" }: Props
 
   const filtered = useMemo(() => {
     const q = filter.trim().toLowerCase();
-    if (!q) return data.addresses;
-    return data.addresses.filter(
-      (a) =>
-        a.label.toLowerCase().includes(q) ||
+    let list = data.addresses.filter((a) => {
+      const selected = selectedIds.includes(a.id);
+      if (a.active === false && !selected) {
+        // Inativos só aparecem se já estiverem na rota ou na busca
+        if (!q) return false;
+      }
+      if (!q) return a.active !== false || selected;
+      const nick = cleanNickname(a.label, a.address).toLowerCase();
+      return (
+        nick.includes(q) ||
         a.address.toLowerCase().includes(q) ||
-        cleanNickname(a.label, a.address).toLowerCase().includes(q),
-    );
-  }, [data.addresses, filter]);
+        (a.complement || "").toLowerCase().includes(q)
+      );
+    });
+    if (addrSort === "alpha") {
+      list = [...list].sort((a, b) =>
+        cleanNickname(a.label, a.address).localeCompare(
+          cleanNickname(b.label, b.address),
+          "pt-BR",
+          { sensitivity: "base" },
+        ),
+      );
+    } else {
+      list = [...list].sort((a, b) => {
+        const ta = a.createdAt ? Date.parse(a.createdAt) : 0;
+        const tb = b.createdAt ? Date.parse(b.createdAt) : 0;
+        if (ta && tb && ta !== tb) return ta - tb;
+        return (
+          data.addresses.findIndex((x) => x.id === a.id) -
+          data.addresses.findIndex((x) => x.id === b.id)
+        );
+      });
+    }
+    return list;
+  }, [data.addresses, filter, addrSort, selectedIds]);
 
   useEffect(() => {
     if (locked) return;
@@ -617,16 +645,31 @@ export function RouteEditor({ data, date, onChange, actorName = "Admin" }: Props
           </div>
         </div>
 
-        <div className="field">
-          <label htmlFor="filter">
-            Endereços do dia ({selectedIds.length} selecionados)
-          </label>
-          <input
-            id="filter"
-            value={filter}
-            onChange={(e) => setFilter(e.target.value)}
-            placeholder="Filtrar por apelido…"
-          />
+        <div className="addr-list-toolbar">
+          <div className="field" style={{ flex: 1, minWidth: "10rem" }}>
+            <label htmlFor="filter">
+              Endereços ({selectedIds.length} selecionados)
+            </label>
+            <input
+              id="filter"
+              value={filter}
+              onChange={(e) => setFilter(e.target.value)}
+              placeholder="Filtrar por apelido…"
+            />
+          </div>
+          <div className="field">
+            <label htmlFor="route-addr-sort">Ordenar</label>
+            <select
+              id="route-addr-sort"
+              value={addrSort}
+              onChange={(e) =>
+                setAddrSort(e.target.value as "added" | "alpha")
+              }
+            >
+              <option value="added">Ordem de adição</option>
+              <option value="alpha">Alfabética</option>
+            </select>
+          </div>
         </div>
 
         <div className="address-checklist tall">
@@ -650,7 +693,7 @@ export function RouteEditor({ data, date, onChange, actorName = "Admin" }: Props
                   key={a.id}
                   className={`address-check-row${selected ? " selected" : ""}${
                     expanded ? " expanded" : ""
-                  }`}
+                  }${a.active === false ? " addr-inactive" : ""}`}
                 >
                   <div className="address-check-main">
                     <label className="address-check">
@@ -661,6 +704,9 @@ export function RouteEditor({ data, date, onChange, actorName = "Admin" }: Props
                       />
                       <span>
                         <strong>{nick}</strong>
+                        {a.active === false ? (
+                          <small className="addr-extra-hint">Inativo</small>
+                        ) : null}
                         {selected && hasExtras && !expanded ? (
                           <small className="addr-extra-hint">
                             {[
@@ -679,23 +725,17 @@ export function RouteEditor({ data, date, onChange, actorName = "Admin" }: Props
                     {selected ? (
                       <button
                         type="button"
-                        className={`addr-expand-btn${expanded ? " open" : ""}`}
+                        className={`addr-expand-btn big${expanded ? " open" : ""}`}
                         aria-expanded={expanded}
-                        aria-label={
-                          expanded
-                            ? "Fechar detalhes do endereço"
-                            : "Abrir entrega, retirada e observações"
-                        }
-                        title={
-                          expanded
-                            ? "Fechar detalhes"
-                            : "Editar entrega / retirada / observações"
-                        }
                         onClick={() => toggleExpanded(a.id)}
                       >
-                        <span aria-hidden>{expanded ? "▾" : "▸"}</span>
+                        <span aria-hidden className="addr-expand-chevron">
+                          {expanded ? "▾" : "▸"}
+                        </span>
                         <span className="addr-expand-label">
-                          {expanded ? "Fechar" : "Detalhes"}
+                          {expanded
+                            ? "Fechar detalhes"
+                            : "Abrir detalhes"}
                         </span>
                       </button>
                     ) : null}

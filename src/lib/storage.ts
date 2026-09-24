@@ -67,6 +67,8 @@ type AddressRow = {
   hours?: unknown;
   lat: number | null;
   lng: number | null;
+  active?: boolean | null;
+  created_at?: string | null;
 };
 
 type SettingsRow = {
@@ -233,6 +235,8 @@ export function upsertSavedAddress(
           : cloneDefaultHours(),
     lat: input.lat ?? prev?.lat ?? null,
     lng: input.lng ?? prev?.lng ?? null,
+    active: prev?.active !== false,
+    createdAt: prev?.createdAt || new Date().toISOString(),
   };
   if (idx >= 0) {
     const copy = [...addresses];
@@ -352,6 +356,8 @@ export async function loadData(): Promise<AppData> {
       hours: normalizeHoursPeriods(row.hours),
       lat: row.lat,
       lng: row.lng,
+      active: row.active !== false,
+      createdAt: row.created_at || undefined,
     }));
   } else if (addressesRes.error) {
     // Fallback se select * falhar por outro motivo / tabela antiga
@@ -368,6 +374,8 @@ export async function loadData(): Promise<AppData> {
         hours: cloneDefaultHours(),
         lat: row.lat,
         lng: row.lng,
+        active: true,
+        createdAt: row.created_at || undefined,
       }));
     }
   }
@@ -529,24 +537,45 @@ export async function saveData(data: AppData): Promise<void> {
           hours: normalizeHoursPeriods(a.hours),
           lat: a.lat,
           lng: a.lng,
+          active: a.active !== false,
         })),
       );
       if (addrUp.error) {
         // Colunas novas ainda não migradas: salva o básico
-        if (/complement|hours|column/i.test(addrUp.error.message)) {
+        if (/active|complement|hours|column/i.test(addrUp.error.message)) {
+          if (/active/i.test(addrUp.error.message)) {
+            console.warn(
+              "Rode supabase/migration_address_active.sql para inativar endereços.",
+            );
+          }
           const fallback = await sb.from("addresses").upsert(
             synced.addresses.map((a) => ({
               id: a.id,
               label: a.label,
               address: a.address,
+              complement: a.complement?.trim() || "",
+              hours: normalizeHoursPeriods(a.hours),
               lat: a.lat,
               lng: a.lng,
             })),
           );
-          if (fallback.error) throw new Error(fallback.error.message);
-          console.warn(
-            "Rode supabase/migration_address_complement_hours.sql para salvar complemento/horário.",
-          );
+          if (fallback.error && /complement|hours|column/i.test(fallback.error.message)) {
+            const basic = await sb.from("addresses").upsert(
+              synced.addresses.map((a) => ({
+                id: a.id,
+                label: a.label,
+                address: a.address,
+                lat: a.lat,
+                lng: a.lng,
+              })),
+            );
+            if (basic.error) throw new Error(basic.error.message);
+            console.warn(
+              "Rode supabase/migration_address_complement_hours.sql para salvar complemento/horário.",
+            );
+          } else if (fallback.error) {
+            throw new Error(fallback.error.message);
+          }
         } else {
           throw new Error(addrUp.error.message);
         }
