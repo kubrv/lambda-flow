@@ -1,10 +1,15 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   type AuthRole,
   completeMotoboyFirstAccess,
   signIn,
   signInWithLogin,
 } from "../../lib/auth";
+import {
+  clearRememberedLogin,
+  loadRememberedLogin,
+  saveRememberedLogin,
+} from "../../lib/rememberLogin";
 import { BrandLogo } from "../BrandLogo";
 
 type Props = {
@@ -20,19 +25,54 @@ export function AuthScreen({
   onBack,
   onCreateCompany,
 }: Props) {
-  const [role, setRole] = useState<AuthRole>("motoboy");
+  const remembered = loadRememberedLogin();
+  const [role, setRole] = useState<AuthRole>(remembered?.role || "motoboy");
   const [mode, setMode] = useState<Mode>("login");
-  const [login, setLogin] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [login, setLogin] = useState(
+    remembered?.role === "motoboy" ? remembered.login : "",
+  );
+  const [email, setEmail] = useState(
+    remembered?.role === "company" ? remembered.login : "",
+  );
+  const [password, setPassword] = useState(remembered?.password || "");
   const [accessCode, setAccessCode] = useState("");
+  const [remember, setRemember] = useState(Boolean(remembered));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    const saved = loadRememberedLogin();
+    if (!saved) return;
+    setRole(saved.role);
+    setRemember(true);
+    setPassword(saved.password);
+    if (saved.role === "motoboy") setLogin(saved.login);
+    else setEmail(saved.login);
+  }, []);
 
   function switchRole(next: AuthRole) {
     setRole(next);
     setError("");
     if (next === "company") setMode("login");
+    const saved = loadRememberedLogin();
+    if (saved && saved.role === next) {
+      setPassword(saved.password);
+      if (next === "motoboy") setLogin(saved.login);
+      else setEmail(saved.login);
+      setRemember(true);
+    }
+  }
+
+  function persistRemember(currentRole: AuthRole, id: string, pwd: string) {
+    if (remember && mode === "login") {
+      saveRememberedLogin({
+        role: currentRole,
+        login: id,
+        password: pwd,
+      });
+    } else if (!remember) {
+      clearRememberedLogin();
+    }
   }
 
   async function submit() {
@@ -52,6 +92,15 @@ export function AuthScreen({
         });
         const resolvedEmail = String(result.email || login.trim());
         await signIn(resolvedEmail, password);
+        if (remember) {
+          saveRememberedLogin({
+            role: "motoboy",
+            login: login.trim(),
+            password,
+          });
+        } else {
+          clearRememberedLogin();
+        }
         onAuthenticated();
         return;
       }
@@ -64,6 +113,7 @@ export function AuthScreen({
       } else {
         await signIn(id, password);
       }
+      persistRemember(role, id, password);
       onAuthenticated();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Falha na autenticação.");
@@ -154,7 +204,7 @@ export function AuthScreen({
 
         <form
           className="form-grid"
-          autoComplete="off"
+          autoComplete={remember ? "on" : "off"}
           onSubmit={(e) => {
             e.preventDefault();
             void submit();
@@ -176,7 +226,7 @@ export function AuthScreen({
               placeholder={
                 role === "motoboy" ? "usuario ou seu@email.com" : "seu@email.com"
               }
-              autoComplete="off"
+              autoComplete={remember ? "username" : "off"}
               autoCapitalize="off"
               autoCorrect="off"
               spellCheck={false}
@@ -213,9 +263,28 @@ export function AuthScreen({
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="••••••••"
-              autoComplete="new-password"
+              autoComplete={remember ? "current-password" : "new-password"}
             />
           </div>
+
+          <label className="remember-check">
+            <input
+              type="checkbox"
+              checked={remember}
+              onChange={(e) => {
+                const on = e.target.checked;
+                setRemember(on);
+                if (!on) clearRememberedLogin();
+              }}
+            />
+            <span>
+              Lembrar login neste computador
+              <small>
+                Salva usuário/e-mail e senha só neste aparelho (empresa ou
+                motoboy).
+              </small>
+            </span>
+          </label>
 
           <button
             type="submit"

@@ -93,6 +93,7 @@ export function RouteEditor({ data, date, onChange, actorName = "Admin" }: Props
   const [status, setStatus] = useState<Status>({ kind: "idle", text: "" });
   const [formEpoch, setFormEpoch] = useState(0);
   const [liveKm, setLiveKm] = useState(0);
+  const [expandedIds, setExpandedIds] = useState<string[]>([]);
 
   // Recarrega ao trocar a data ou após limpar (formEpoch).
   useEffect(() => {
@@ -122,6 +123,7 @@ export function RouteEditor({ data, date, onChange, actorName = "Admin" }: Props
     setStopNotes(h.stopNotes);
     setStopBoxes(h.stopBoxes);
     setLiveKm(Number(route.totalKm) || 0);
+    setExpandedIds([]);
     setFilter("");
     // eslint-disable-next-line react-hooks/exhaustive-deps -- intencional
   }, [date, formEpoch]);
@@ -251,12 +253,20 @@ export function RouteEditor({ data, date, onChange, actorName = "Admin" }: Props
           delete x[id];
           return x;
         });
+        setExpandedIds((e) => e.filter((x) => x !== id));
         return prev.filter((x) => x !== id);
       }
       setStopKinds((k) => ({ ...k, [id]: k[id] || { ...DEFAULT_FLAGS } }));
       setStopBoxes((b) => ({ ...b, [id]: b[id] ?? 0 }));
+      // Não abre painel de detalhes automaticamente
       return [...prev, id];
     });
+  }
+
+  function toggleExpanded(id: string) {
+    setExpandedIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+    );
   }
 
   function toggleKindFlag(id: string, flag: StopKind) {
@@ -627,24 +637,70 @@ export function RouteEditor({ data, date, onChange, actorName = "Admin" }: Props
           ) : (
             filtered.map((a) => {
               const selected = selectedIds.includes(a.id);
+              const expanded = expandedIds.includes(a.id);
               const flags = stopKinds[a.id] || DEFAULT_FLAGS;
               const nick = cleanNickname(a.label, a.address);
+              const hasExtras =
+                Boolean(stopNotes[a.id]?.trim()) ||
+                normalizeBoxes(stopBoxes[a.id]) > 0 ||
+                flags.retirada ||
+                !flags.entrega;
               return (
                 <div
                   key={a.id}
-                  className={`address-check-row${selected ? " selected" : ""}`}
+                  className={`address-check-row${selected ? " selected" : ""}${
+                    expanded ? " expanded" : ""
+                  }`}
                 >
-                  <label className="address-check">
-                    <input
-                      type="checkbox"
-                      checked={selected}
-                      onChange={() => toggleAddress(a.id)}
-                    />
-                    <span>
-                      <strong>{nick}</strong>
-                    </span>
-                  </label>
-                  {selected ? (
+                  <div className="address-check-main">
+                    <label className="address-check">
+                      <input
+                        type="checkbox"
+                        checked={selected}
+                        onChange={() => toggleAddress(a.id)}
+                      />
+                      <span>
+                        <strong>{nick}</strong>
+                        {selected && hasExtras && !expanded ? (
+                          <small className="addr-extra-hint">
+                            {[
+                              flags.entrega ? "Entrega" : null,
+                              flags.retirada ? "Retirada" : null,
+                              normalizeBoxes(stopBoxes[a.id]) > 0
+                                ? `${normalizeBoxes(stopBoxes[a.id])} cx`
+                                : null,
+                            ]
+                              .filter(Boolean)
+                              .join(" · ")}
+                          </small>
+                        ) : null}
+                      </span>
+                    </label>
+                    {selected ? (
+                      <button
+                        type="button"
+                        className={`addr-expand-btn${expanded ? " open" : ""}`}
+                        aria-expanded={expanded}
+                        aria-label={
+                          expanded
+                            ? "Fechar detalhes do endereço"
+                            : "Abrir entrega, retirada e observações"
+                        }
+                        title={
+                          expanded
+                            ? "Fechar detalhes"
+                            : "Editar entrega / retirada / observações"
+                        }
+                        onClick={() => toggleExpanded(a.id)}
+                      >
+                        <span aria-hidden>{expanded ? "▾" : "▸"}</span>
+                        <span className="addr-expand-label">
+                          {expanded ? "Fechar" : "Detalhes"}
+                        </span>
+                      </button>
+                    ) : null}
+                  </div>
+                  {selected && expanded ? (
                     <div className="stop-extra">
                       <div className="kind-toggles" role="group" aria-label="Tipo">
                         <button

@@ -513,12 +513,86 @@ a {
   display: grid;
   grid-template-columns: 1fr;
   gap: 0.35rem;
-  padding-bottom: 0.35rem;
+  padding: 0.2rem 0.25rem 0.35rem;
   border-bottom: 1px solid rgba(255, 255, 255, 0.04);
 }
 
 .address-check-row:last-child {
   border-bottom: none;
+}
+
+.address-check-main {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.35rem;
+  align-items: center;
+}
+
+.addr-expand-btn {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  border: 1px solid rgba(56, 232, 255, 0.28);
+  background: rgba(3, 16, 24, 0.75);
+  color: var(--cyan);
+  border-radius: 10px;
+  padding: 0.35rem 0.55rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.addr-expand-btn:hover {
+  border-color: rgba(56, 232, 255, 0.55);
+  background: rgba(56, 232, 255, 0.08);
+}
+
+.addr-expand-btn.open {
+  border-color: rgba(56, 232, 255, 0.55);
+  background: rgba(56, 232, 255, 0.12);
+}
+
+.addr-extra-hint {
+  display: block;
+  margin-top: 0.15rem;
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.remember-check {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.55rem;
+  align-items: start;
+  padding: 0.55rem 0.65rem;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: rgba(3, 16, 24, 0.45);
+  cursor: pointer;
+  user-select: none;
+}
+
+.remember-check input {
+  margin-top: 0.15rem;
+}
+
+.remember-check span {
+  display: grid;
+  gap: 0.15rem;
+  color: var(--text);
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.remember-check small {
+  display: block;
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1.35;
 }
 
 .stop-extra {

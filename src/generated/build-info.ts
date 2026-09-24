@@ -1,10 +1,10 @@
 /* Gerado automaticamente no build — não edite. */
 export const BUILD_INFO = {
-  version: "2026.09.24-96bee3e",
-  display: "0.2.0+96bee3e",
-  commit: "96bee3e",
-  commitFull: "96bee3e4010e258d35b51762b998e3d509c4598e",
-  message: "Fix brand logo and footer using lambda-strike assets.",
-  builtAt: "2026-09-24T18:49:59.952Z",
+  version: "2026.09.24-5d9c1e8",
+  display: "0.2.0+5d9c1e8",
+  commit: "5d9c1e8",
+  commitFull: "5d9c1e86248af1515294cfaf1c5a090096584e48",
+  message: "Polish route editor: nickname list, live fare, and required motoboy.",
+  builtAt: "2026-09-24T19:02:35.136Z",
   packageVersion: "0.2.0",
 } as const;
