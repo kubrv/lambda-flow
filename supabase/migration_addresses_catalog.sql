@@ -1,5 +1,6 @@
--- Catálogo de endereços reutilizáveis entre dias
--- Preferível: rode migration_addresses_catalog.sql (já inclui complemento/horário/active).
+-- Catálogo completo de endereços (criar + colunas atuais)
+-- Rode isto no SQL Editor do Supabase se aparecer:
+--   Could not find the table 'public.addresses'
 
 create extension if not exists "pgcrypto";
 
@@ -16,6 +17,17 @@ create table if not exists public.addresses (
   created_at timestamptz not null default now()
 );
 
+-- Se a tabela já existia sem as colunas novas:
+alter table public.addresses
+  add column if not exists complement text not null default '';
+
+alter table public.addresses
+  add column if not exists hours jsonb not null default
+    '[{"open":"09:00","close":"12:00"},{"open":"13:00","close":"17:00"}]'::jsonb;
+
+alter table public.addresses
+  add column if not exists active boolean not null default true;
+
 create unique index if not exists addresses_address_unique
   on public.addresses (lower(trim(address)));
 
@@ -25,5 +37,5 @@ drop policy if exists "addresses_all" on public.addresses;
 create policy "addresses_all" on public.addresses
   for all using (true) with check (true);
 
+-- Atualiza o cache de schema da API (PostgREST)
 notify pgrst, 'reload schema';
-

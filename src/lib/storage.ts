@@ -380,8 +380,13 @@ export async function loadData(): Promise<AppData> {
       .select("id,label,address,lat,lng,created_at")
       .order("created_at");
     if (legacyAddr.error) {
+      const hint = /Could not find the table|does not exist|schema cache/i.test(
+        addressesRes.error.message,
+      )
+        ? " Rode no Supabase SQL Editor: supabase/migration_addresses_catalog.sql"
+        : "";
       throw new Error(
-        `Falha ao carregar endereços: ${addressesRes.error.message}`,
+        `Falha ao carregar endereços: ${addressesRes.error.message}.${hint}`,
       );
     }
     data.addresses = (legacyAddr.data as AddressRow[]).map((row) => ({

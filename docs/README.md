@@ -9,6 +9,14 @@ Pasta sincronizada com o vault Obsidian (Specs/lambda-flow).
 - Remover endereço/motoboy/lançamento ou limpar rota chama **delete explícito**.
 - Catálogo de endereços preserva todos os IDs (não colapsa por texto igual).
 
+## Setup Supabase — endereços
+
+Se o app mostrar `Could not find the table 'public.addresses'`, rode no **SQL Editor**:
+
+`supabase/migration_addresses_catalog.sql`
+
+(Isso cria a tabela com complemento, horário e `active`.)
+
 ## Endereços (admin)
 
 - Lista com ordenação: **ordem de adição** ou **alfabética**.

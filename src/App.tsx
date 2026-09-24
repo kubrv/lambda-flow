@@ -153,12 +153,14 @@ export default function App() {
   }
 
   if (loadError) {
+    const sqlHint = /addresses|schema cache/i.test(loadError)
+      ? "supabase/migration_addresses_catalog.sql"
+      : "supabase/migration_auth_billing.sql";
     return (
       <div className="app-shell">
         <div className="status err">{loadError}</div>
         <p className="hint">
-          Rode no Supabase:{" "}
-          <code>supabase/migration_auth_billing.sql</code>
+          Rode no Supabase SQL Editor: <code>{sqlHint}</code>
         </p>
       </div>
     );
