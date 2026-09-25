@@ -2,15 +2,13 @@ import { useState } from "react";
 import {
   adminSetMotoboyPassword,
   provisionMotoboyAccount,
-  resetAllMotoboyLogins,
+  resetOneMotoboyLogin,
 } from "../../lib/auth";
 import { motoboyFinanceSummary } from "../../lib/finance";
 import { formatMoneyBRL } from "../../lib/labels";
 import {
   PAY_DAY_OPTIONS,
   PAY_METHOD_OPTIONS,
-  payDayLabel,
-  payMethodLabel,
   type PayDayPreference,
   type PayMethod,
 } from "../../lib/payPrefs";
@@ -84,6 +82,7 @@ export function MotoboysAdmin({ data, onChange }: Props) {
   const [msg, setMsg] = useState("");
   const [err, setErr] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [managingId, setManagingId] = useState<string | null>(null);
   const [accessCodes, setAccessCodes] = useState<Record<string, string>>({});
   const [resetPwd, setResetPwd] = useState<Record<string, string>>({});
 
@@ -109,15 +108,8 @@ export function MotoboysAdmin({ data, onChange }: Props) {
     setDraft(emptyDraft());
     setShowAdd(false);
     setMsg(
-      "Motoboy cadastrado. Preencha e-mail/usuário e clique em «Gerar 1º acesso» ou «Criar senha».",
+      "Motoboy cadastrado. Abra Gerenciar e informe usuário + celular para gerar o 1º acesso.",
     );
-  }
-
-  function startEdit(m: Motoboy) {
-    setEditingId(m.id);
-    setEdit(fromMotoboy(m));
-    setMsg("");
-    setErr("");
   }
 
   function saveEdit() {
@@ -142,25 +134,26 @@ export function MotoboysAdmin({ data, onChange }: Props) {
   async function generateAccess(m: Motoboy) {
     setErr("");
     setMsg("");
-    const email = (editingId === m.id ? edit.email : m.email || "").trim();
     const username = (editingId === m.id ? edit.username : m.username || "")
       .trim()
       .toLowerCase();
     const name = (editingId === m.id ? edit.name : m.name).trim();
     const phone = (editingId === m.id ? edit.phone : m.phone || "").trim();
-    if (!email || !username || !name) {
-      setErr("Salve nome, e-mail e usuário antes de gerar o 1º acesso.");
+    const email = (editingId === m.id ? edit.email : m.email || "")
+      .trim()
+      .toLowerCase();
+    if (!username || !phone || !name) {
+      setErr("Salve nome, usuário e celular antes de gerar o 1º acesso.");
       return;
     }
-    // persiste campos no perfil local antes da API
     const patched = data.motoboys.map((row) =>
       row.id === m.id
         ? {
             ...row,
             name,
-            email: email.toLowerCase(),
             username,
-            phone: phone || undefined,
+            phone,
+            email: email || undefined,
           }
         : row,
     );
@@ -173,9 +166,9 @@ export function MotoboysAdmin({ data, onChange }: Props) {
       const result = await provisionMotoboyAccount({
         motoboyId: m.id,
         name,
-        email,
         username,
         phone,
+        email: email || undefined,
       });
       const code = String(result.accessCode || "");
       setAccessCodes((prev) => ({ ...prev, [m.id]: code }));
@@ -183,12 +176,18 @@ export function MotoboysAdmin({ data, onChange }: Props) {
         ...nextData,
         motoboys: patched.map((row) =>
           row.id === m.id
-            ? { ...row, passwordSet: false, email: email.toLowerCase(), username }
+            ? {
+                ...row,
+                passwordSet: false,
+                username,
+                phone,
+                email: email || String(result.email || "") || undefined,
+              }
             : row,
         ),
       });
       setMsg(
-        `Código de 1º acesso gerado para ${name}. Entregue só a ele — a senha só ele cria.`,
+        `Senha provisória (4 dígitos) para ${name}: ${code}. No 1º acesso ele troca pela senha definitiva.`,
       );
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Falha ao gerar acesso.");
@@ -203,11 +202,6 @@ export function MotoboysAdmin({ data, onChange }: Props) {
     const pwd = (resetPwd[m.id] || "").trim();
     if (pwd.length < 6) {
       setErr("Senha com no mínimo 6 caracteres.");
-      return;
-    }
-    const email = (m.email || "").trim();
-    if (!email) {
-      setErr("Salve o e-mail do motoboy antes de criar a senha.");
       return;
     }
     setBusyId(m.id);
@@ -231,37 +225,35 @@ export function MotoboysAdmin({ data, onChange }: Props) {
     }
   }
 
-  async function wipeLogins() {
+  async function resetOneLogin(m: Motoboy) {
     setErr("");
     setMsg("");
     if (
       !window.confirm(
-        "Isso apaga e-mail, usuário e senha de TODOS os motoboys (fica só o nome). Continuar?",
+        `Resetar o login de ${m.name}? Ele precisará de um novo 1º acesso.`,
       )
     ) {
       return;
     }
-    setBusyId("__reset__");
+    setBusyId(m.id);
     try {
-      const result = await resetAllMotoboyLogins();
-      const cleared = data.motoboys.map((m) => ({
-        ...m,
-        email: undefined,
-        username: undefined,
-        userId: undefined,
-        passwordSet: false,
-      }));
-      onChange({ ...data, motoboys: cleared });
-      setAccessCodes({});
-      setResetPwd({});
-      setMsg(
-        String(
-          result.message ||
-            "Acessos zerados. Cadastre e-mail/usuário e gere o 1º acesso.",
+      await resetOneMotoboyLogin(m.id);
+      onChange({
+        ...data,
+        motoboys: data.motoboys.map((row) =>
+          row.id === m.id
+            ? { ...row, userId: undefined, passwordSet: false }
+            : row,
         ),
-      );
+      });
+      setAccessCodes((prev) => {
+        const n = { ...prev };
+        delete n[m.id];
+        return n;
+      });
+      setMsg("Login resetado. Gere um novo 1º acesso (senha de 4 dígitos).");
     } catch (e) {
-      setErr(e instanceof Error ? e.message : "Falha ao zerar acessos.");
+      setErr(e instanceof Error ? e.message : "Falha ao resetar login.");
     } finally {
       setBusyId(null);
     }
@@ -314,7 +306,7 @@ export function MotoboysAdmin({ data, onChange }: Props) {
           />
         </div>
         <div className="field">
-          <label htmlFor={`${idPrefix}-phone`}>Telefone</label>
+          <label htmlFor={`${idPrefix}-phone`}>Celular (obrigatório p/ acesso)</label>
           <input
             id={`${idPrefix}-phone`}
             value={value.phone}
@@ -323,19 +315,19 @@ export function MotoboysAdmin({ data, onChange }: Props) {
           />
         </div>
         <div className="field">
-          <label htmlFor={`${idPrefix}-email`}>E-mail</label>
+          <label htmlFor={`${idPrefix}-email`}>E-mail (opcional)</label>
           <input
             id={`${idPrefix}-email`}
             type="email"
             value={value.email}
             onChange={(e) => setValue({ ...value, email: e.target.value })}
-            placeholder="motoboy@email.com"
+            placeholder="opcional"
             autoComplete="off"
             name={`${idPrefix}-email`}
           />
         </div>
         <div className="field">
-          <label htmlFor={`${idPrefix}-user`}>Usuário</label>
+          <label htmlFor={`${idPrefix}-user`}>Usuário (obrigatório p/ acesso)</label>
           <input
             id={`${idPrefix}-user`}
             value={value.username}
@@ -426,10 +418,9 @@ export function MotoboysAdmin({ data, onChange }: Props) {
     <section className="panel">
       <h2>Cadastro de motoboys</h2>
       <p className="lede">
-        Cadastre nome, telefone, e-mail e usuário. Você pode{" "}
-        <strong>criar a senha</strong> (sem visualizá-la depois) ou gerar o{" "}
-        <strong>1º acesso</strong> para o motoboy criar. Depois, ele pode
-        alterar a senha no próprio perfil.
+        Cadastre com nome, <strong>usuário</strong> e <strong>celular</strong>.
+        Em Gerenciar, gere o 1º acesso (senha de 4 dígitos). E-mail e preferências
+        são opcionais.
       </p>
       <div className="row-actions" style={{ marginBottom: "0.75rem" }}>
         <button
@@ -442,16 +433,6 @@ export function MotoboysAdmin({ data, onChange }: Props) {
           }}
         >
           {showAdd ? "Fechar formulário" : "Adicionar motoboy"}
-        </button>
-        <button
-          type="button"
-          className="btn danger ghost"
-          disabled={busyId === "__reset__"}
-          onClick={() => void wipeLogins()}
-        >
-          {busyId === "__reset__"
-            ? "Zerando…"
-            : "Zerar e-mails e acessos (reiniciar login)"}
         </button>
       </div>
 
@@ -487,54 +468,68 @@ export function MotoboysAdmin({ data, onChange }: Props) {
             const fin = motoboyFinanceSummary(data.finance, m.id);
             const rate = m.pricePerKm ?? DEFAULT_PRICE_PER_KM;
             const shownCode = accessCodes[m.id];
+            const managing = managingId === m.id;
             return (
               <div className="motoboy-item finance-item" key={m.id}>
-                {editingId === m.id ? (
-                  <div className="form-grid" style={{ flex: 1, width: "100%" }}>
-                    {profileFields(edit, setEdit, `e-${m.id}`)}
-                    <div className="row-actions">
-                      <button
-                        type="button"
-                        className="btn primary"
-                        onClick={saveEdit}
-                      >
-                        Salvar perfil
-                      </button>
-                      <button
-                        type="button"
-                        className="btn"
-                        onClick={() => {
-                          setEditingId(null);
-                          setEdit(emptyDraft());
-                        }}
-                      >
-                        Cancelar
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <>
-                    <div style={{ flex: 1 }}>
+                <div style={{ flex: 1, width: "100%" }}>
+                  <div className="moto-card-head">
+                    <div>
                       <strong>{m.name}</strong>
                       <div className="hint">
-                        {m.username ? `@${m.username} · ` : ""}
-                        {m.email ? `${m.email} · ` : ""}
-                        {m.company ? `${m.company} · ` : ""}
-                        {m.phone ? `${m.phone} · ` : ""}
-                        {formatMoneyBRL(rate)}/km · {days} dia(s) com rota
-                      </div>
-                      <div className="hint">
-                        Pagamento: {payDayLabel(m.payDayPreference)} ·{" "}
-                        {payMethodLabel(m.payMethodPreference)}
-                        {m.pixKey ? ` · PIX ${m.pixKey}` : ""}
+                        {m.username ? `@${m.username}` : "sem usuário"}
+                        {m.phone ? ` · ${m.phone}` : ""}
+                        {" · "}
+                        {formatMoneyBRL(rate)}/km · {days} dia(s)
                       </div>
                       <div className="hint">
                         Acesso:{" "}
                         {m.passwordSet
-                          ? "senha definida (admin ou motoboy)"
-                          : m.email
-                            ? "e-mail ok — defina a senha ou gere 1º acesso"
-                            : "sem e-mail/usuário ainda"}
+                          ? "senha definitiva ok"
+                          : m.username
+                            ? "aguardo 1º acesso / senha provisória"
+                            : "cadastre usuário e celular"}
+                      </div>
+                    </div>
+                    <div className="row-actions">
+                      <button
+                        type="button"
+                        className="btn primary"
+                        onClick={() => {
+                          setManagingId(managing ? null : m.id);
+                          if (!managing) {
+                            setEditingId(m.id);
+                            setEdit(fromMotoboy(m));
+                          } else {
+                            setEditingId(null);
+                            setEdit(emptyDraft());
+                          }
+                          setErr("");
+                          setMsg("");
+                        }}
+                      >
+                        {managing ? "Fechar" : "Gerenciar motoboy"}
+                      </button>
+                      <button
+                        type="button"
+                        className="btn danger ghost"
+                        onClick={() => void remove(m.id)}
+                      >
+                        Remover
+                      </button>
+                    </div>
+                  </div>
+
+                  {managing ? (
+                    <div className="moto-manage-panel">
+                      {profileFields(edit, setEdit, `e-${m.id}`)}
+                      <div className="row-actions">
+                        <button
+                          type="button"
+                          className="btn primary"
+                          onClick={saveEdit}
+                        >
+                          Salvar perfil
+                        </button>
                       </div>
                       <div className="moto-finance-line">
                         <span>
@@ -546,14 +541,15 @@ export function MotoboysAdmin({ data, onChange }: Props) {
                           <strong>{formatMoneyBRL(fin.settled)}</strong>
                         </span>
                         <span>
-                          Total ganho:{" "}
-                          <strong>{formatMoneyBRL(fin.earned)}</strong>
+                          Total: <strong>{formatMoneyBRL(fin.earned)}</strong>
                         </span>
                       </div>
                       {shownCode ? (
                         <div className="status ok" style={{ marginTop: "0.5rem" }}>
-                          Código de 1º acesso (mostre uma vez):{" "}
-                          <strong>{shownCode}</strong>
+                          Senha provisória (4 dígitos):{" "}
+                          <strong style={{ fontSize: "1.25rem" }}>
+                            {shownCode}
+                          </strong>
                         </div>
                       ) : null}
                       <div
@@ -568,63 +564,47 @@ export function MotoboysAdmin({ data, onChange }: Props) {
                         >
                           {busyId === m.id
                             ? "Gerando…"
-                            : m.passwordSet
-                              ? "Gerar novo código de 1º acesso"
-                              : "Gerar 1º acesso"}
+                            : "Gerar 1º acesso (4 dígitos)"}
+                        </button>
+                        <button
+                          type="button"
+                          className="btn danger ghost"
+                          disabled={busyId === m.id}
+                          onClick={() => void resetOneLogin(m)}
+                        >
+                          Resetar login deste motoboy
                         </button>
                       </div>
-                      {m.email ? (
-                        <div
-                          className="field"
-                          style={{ marginTop: "0.5rem", maxWidth: 320 }}
+                      <div
+                        className="field"
+                        style={{ marginTop: "0.5rem", maxWidth: 320 }}
+                      >
+                        <label>Definir senha definitiva (opcional)</label>
+                        <input
+                          type="password"
+                          value={resetPwd[m.id] || ""}
+                          onChange={(e) =>
+                            setResetPwd((prev) => ({
+                              ...prev,
+                              [m.id]: e.target.value,
+                            }))
+                          }
+                          placeholder="Mín. 6 caracteres"
+                          autoComplete="new-password"
+                        />
+                        <button
+                          type="button"
+                          className="btn"
+                          style={{ marginTop: "0.35rem" }}
+                          disabled={busyId === m.id}
+                          onClick={() => void resetPassword(m)}
                         >
-                          <label>
-                            {m.passwordSet
-                              ? "Alterar senha (não fica visível depois)"
-                              : "Criar senha (não fica visível depois)"}
-                          </label>
-                          <input
-                            type="password"
-                            value={resetPwd[m.id] || ""}
-                            onChange={(e) =>
-                              setResetPwd((prev) => ({
-                                ...prev,
-                                [m.id]: e.target.value,
-                              }))
-                            }
-                            placeholder="Digite a senha"
-                            autoComplete="new-password"
-                          />
-                          <button
-                            type="button"
-                            className="btn"
-                            style={{ marginTop: "0.35rem" }}
-                            disabled={busyId === m.id}
-                            onClick={() => void resetPassword(m)}
-                          >
-                            {m.passwordSet ? "Alterar senha" : "Criar senha"}
-                          </button>
-                        </div>
-                      ) : null}
+                          Salvar senha
+                        </button>
+                      </div>
                     </div>
-                    <div className="row-actions">
-                      <button
-                        type="button"
-                        className="btn"
-                        onClick={() => startEdit(m)}
-                      >
-                        Editar perfil
-                      </button>
-                      <button
-                        type="button"
-                        className="btn danger ghost"
-                        onClick={() => remove(m.id)}
-                      >
-                        Remover
-                      </button>
-                    </div>
-                  </>
-                )}
+                  ) : null}
+                </div>
               </div>
             );
           })}

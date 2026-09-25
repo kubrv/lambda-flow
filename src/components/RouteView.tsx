@@ -18,6 +18,7 @@ import {
   DEFAULT_PRICE_PER_KM,
   normalizeBoxes,
   resolveStopKinds,
+  resolveStopNotes,
   totalBoxes,
 } from "../lib/types";
 import { RouteCompletionPanel } from "./RouteCompletionPanel";
@@ -213,6 +214,7 @@ export function RouteView({
             {route.stops.map((stop, index) => {
               const kinds = resolveStopKinds(stop);
               const boxes = normalizeBoxes(stop.boxes);
+              const notes = resolveStopNotes(stop);
               const point = pointFromCoords(stop.lat, stop.lng, stop.address);
               return (
                 <div className="stop" key={stop.id}>
@@ -238,13 +240,23 @@ export function RouteView({
                       {kinds.includes("retirada") ? (
                         <span className="kind-badge retirada">Retirada</span>
                       ) : null}
-                      <span className="boxes-qty">
-                        {boxes} {boxes === 1 ? "caixa" : "caixas"}
-                      </span>
+                      {boxes > 0 ? (
+                        <span className="boxes-qty">
+                          {boxes}{" "}
+                          {boxes === 1
+                            ? "caixa a entregar"
+                            : "caixas a entregar"}
+                        </span>
+                      ) : null}
                     </div>
-                    {stop.notes?.trim() ? (
+                    {notes.entrega ? (
                       <p className="stop-notes">
-                        <strong>Obs:</strong> {stop.notes.trim()}
+                        <strong>Obs. entrega:</strong> {notes.entrega}
+                      </p>
+                    ) : null}
+                    {notes.retirada ? (
+                      <p className="stop-notes">
+                        <strong>Obs. retirada:</strong> {notes.retirada}
                       </p>
                     ) : null}
                   </div>

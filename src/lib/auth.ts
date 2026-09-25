@@ -110,9 +110,9 @@ export async function completeMotoboyFirstAccess(input: {
 export async function provisionMotoboyAccount(input: {
   motoboyId: string;
   name: string;
-  email: string;
   username: string;
-  phone?: string;
+  phone: string;
+  email?: string;
 }) {
   return callMotoboyAccount({
     action: "provision",
@@ -154,7 +154,15 @@ export async function changeOwnPassword(
   if (error) throw error;
 }
 
-/** Zera e-mails/usuários/senhas de todos os motoboys (mantém só o nome). */
+/** Zera o acesso de um motoboy (mantém cadastro). */
+export async function resetOneMotoboyLogin(motoboyId: string) {
+  return callMotoboyAccount({
+    action: "reset-one-login",
+    motoboyId,
+  });
+}
+
+/** @deprecated use resetOneMotoboyLogin */
 export async function resetAllMotoboyLogins() {
   return callMotoboyAccount({
     action: "reset-all-logins",

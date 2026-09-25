@@ -17,11 +17,14 @@ function hashCode(code: string) {
 }
 
 function makeAccessCode() {
-  return randomBytes(3).toString("hex").toUpperCase();
+  // Senha provisória de 4 dígitos (1º acesso)
+  return String(1000 + (randomBytes(2).readUInt16BE(0) % 9000));
 }
 
-function makeTempPassword() {
-  return `Tmp!${randomBytes(12).toString("base64url")}`;
+function syntheticEmail(username: string) {
+  const u =
+    username.trim().toLowerCase().replace(/[^a-z0-9._-]/g, "") || "moto";
+  return `moto.${u}@lambda-flow.app`;
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -116,9 +119,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(403).json({ ok: false, error: "Código expirado. Peça um novo ao admin." });
       }
 
-      const email = String(moto.email || "").toLowerCase();
+      const email =
+        String(moto.email || "").toLowerCase() ||
+        syntheticEmail(String(moto.username || login));
       if (!email) {
-        return res.status(400).json({ ok: false, error: "Motoboy sem e-mail cadastrado." });
+        return res.status(400).json({
+          ok: false,
+          error: "Motoboy sem usuário cadastrado.",
+        });
       }
 
       let userId = moto.user_id as string | null;
@@ -190,16 +198,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(404).json({ ok: false, error: "Motoboy não encontrado." });
       }
 
-      const email = String(moto.email || "").trim().toLowerCase();
       const username = String(moto.username || "").trim().toLowerCase();
       const name = String(moto.name || "").trim();
+      const email =
+        String(moto.email || "").trim().toLowerCase() ||
+        (username ? syntheticEmail(username) : "");
 
       let userId = (moto.user_id as string) || null;
       if (!userId) {
         if (!email) {
           return res.status(400).json({
             ok: false,
-            error: "Cadastre o e-mail do motoboy antes de criar a senha.",
+            error: "Cadastre o usuário do motoboy antes de criar a senha.",
           });
         }
         const created = await sb.auth.admin.createUser({
@@ -332,20 +342,63 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
+    if (action === "reset-one-login") {
+      const motoboyId = String(body.motoboyId || "");
+      if (!motoboyId) {
+        return res.status(400).json({ ok: false, error: "Informe o motoboy." });
+      }
+      const { data: moto } = await sb
+        .from("motoboys")
+        .select("*")
+        .eq("id", motoboyId)
+        .maybeSingle();
+      if (!moto) {
+        return res.status(404).json({ ok: false, error: "Motoboy não encontrado." });
+      }
+      const userId = moto.user_id as string | null;
+      if (userId) {
+        await sb.from("profiles").delete().eq("user_id", userId);
+        await sb.auth.admin.deleteUser(userId);
+      }
+      const up = await sb
+        .from("motoboys")
+        .update({
+          user_id: null,
+          password_set: false,
+          access_code_hash: null,
+          access_code_expires_at: null,
+          // Mantém username/telefone; e-mail sintético pode permanecer
+        })
+        .eq("id", motoboyId);
+      if (up.error) throw up.error;
+      return res.status(200).json({
+        ok: true,
+        message:
+          "Acesso deste motoboy resetado. Gere um novo 1º acesso (senha de 4 dígitos).",
+      });
+    }
+
     // provision / regenerate access code
     const motoboyId = String(body.motoboyId || "");
     const name = String(body.name || "").trim();
-    const email = String(body.email || "").trim().toLowerCase();
     const username = String(body.username || "")
       .trim()
       .toLowerCase()
       .replace(/[^a-z0-9._-]/g, "");
     const phone = String(body.phone || "").trim();
+    const emailRaw = String(body.email || "").trim().toLowerCase();
+    const email = emailRaw || (username ? syntheticEmail(username) : "");
 
-    if (!motoboyId || !name || !email || !username) {
+    if (!motoboyId || !name || !username || !phone) {
       return res.status(400).json({
         ok: false,
-        error: "Informe motoboyId, nome, e-mail e usuário.",
+        error: "Informe motoboyId, nome, usuário e celular.",
+      });
+    }
+    if (!email) {
+      return res.status(400).json({
+        ok: false,
+        error: "Informe um usuário válido.",
       });
     }
 
@@ -359,10 +412,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .maybeSingle();
 
     let userId = (existing?.user_id as string) || null;
+    // Senha provisória no Auth = 4 dígitos repetidos (mín. 6 no Supabase)
+    const tempAuthPassword = `${accessCode}${accessCode}`;
     if (!userId) {
       const created = await sb.auth.admin.createUser({
         email,
-        password: makeTempPassword(),
+        password: tempAuthPassword,
         email_confirm: true,
         user_metadata: {
           full_name: name,
@@ -373,7 +428,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         },
       });
       if (created.error) {
-        // e-mail já existe: tenta achar
         if (/already|registered|exists/i.test(created.error.message)) {
           const listed = await sb.auth.admin.listUsers({ perPage: 200 });
           const found = listed.data?.users?.find(
@@ -381,12 +435,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           );
           userId = found?.id || null;
           if (!userId) throw created.error;
+          const upd = await sb.auth.admin.updateUserById(userId, {
+            password: tempAuthPassword,
+            email_confirm: true,
+          });
+          if (upd.error) throw upd.error;
         } else {
           throw created.error;
         }
       } else {
         userId = created.data.user?.id || null;
       }
+    } else {
+      const upd = await sb.auth.admin.updateUserById(userId, {
+        password: tempAuthPassword,
+        email_confirm: true,
+        email,
+      });
+      if (upd.error) throw upd.error;
     }
 
     if (!userId) throw new Error("Não foi possível criar o usuário.");
@@ -411,7 +477,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       access_code_hash: hashCode(accessCode),
       access_code_expires_at: expires,
     };
-    // keep pay prefs if columns exist
     const up = await sb.from("motoboys").update(patch).eq("id", motoboyId);
     if (up.error && /column|email|username|access_code/i.test(up.error.message)) {
       return res.status(500).json({
@@ -430,7 +495,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       email,
       username,
       message:
-        "Acesso criado. Entregue o código de 1º acesso ao motoboy — só ele cria a senha.",
+        "1º acesso gerado. Entregue a senha de 4 dígitos ao motoboy — no 1º login ele cria a senha definitiva.",
     });
   } catch (err) {
     return res.status(500).json({

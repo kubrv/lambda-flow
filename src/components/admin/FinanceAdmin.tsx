@@ -44,6 +44,7 @@ export function FinanceAdmin({ data, onChange }: Props) {
   const [msg, setMsg] = useState("");
   const [settleId, setSettleId] = useState<string | null>(null);
   const [settleMethod, setSettleMethod] = useState<PayMethod>("pix");
+  const [boySort, setBoySort] = useState<"earned" | "name">("earned");
 
   const selectedMotoboy = data.motoboys.find((m) => m.id === motoboyId);
   const rate = resolveMotoboyPricePerKm(
@@ -204,11 +205,11 @@ export function FinanceAdmin({ data, onChange }: Props) {
       </p>
 
       <div className="meta-grid" style={{ marginBottom: "1rem" }}>
-        <div className="meta-card">
-          <label>Saldo pendente</label>
+        <div className="meta-card finance-summary-open">
+          <label>Saldo em aberto</label>
           <strong>{formatMoneyBRL(global.pending)}</strong>
         </div>
-        <div className="meta-card">
+        <div className="meta-card finance-summary-paid">
           <label>Valores acertados</label>
           <strong>{formatMoneyBRL(global.settled)}</strong>
         </div>
@@ -278,21 +279,56 @@ export function FinanceAdmin({ data, onChange }: Props) {
         </div>
       </div>
 
-      <div className="meta-grid" style={{ marginBottom: "1rem" }}>
-        {data.motoboys.map((m) => {
+      <div className="field" style={{ marginBottom: "0.75rem", maxWidth: 280 }}>
+        <label htmlFor="boy-sort">Ordenar motoboys</label>
+        <select
+          id="boy-sort"
+          value={boySort}
+          onChange={(e) => setBoySort(e.target.value as "earned" | "name")}
+        >
+          <option value="earned">Por total ganho</option>
+          <option value="name">Por nome</option>
+        </select>
+      </div>
+
+      <div className="meta-grid finance-boy-grid" style={{ marginBottom: "1rem" }}>
+        {[...data.motoboys]
+          .sort((a, b) => {
+            if (boySort === "name") {
+              return a.name.localeCompare(b.name, "pt-BR", {
+                sensitivity: "base",
+              });
+            }
+            const ea = motoboyFinanceSummary(data.finance, a.id).earned;
+            const eb = motoboyFinanceSummary(data.finance, b.id).earned;
+            return eb - ea || a.name.localeCompare(b.name, "pt-BR");
+          })
+          .map((m) => {
           const t = motoboyFinanceSummary(data.finance, m.id);
           const mRate = resolveMotoboyPricePerKm(m, data.pricePerKm);
           return (
-            <div className="meta-card" key={m.id}>
+            <div
+              className={`meta-card finance-boy-card${
+                t.pending > 0 ? " has-open" : t.settled > 0 ? " all-settled" : ""
+              }`}
+              key={m.id}
+            >
               <label>
                 {m.name}
                 {m.company ? ` · ${m.company}` : ""}
               </label>
-              <strong>{formatMoneyBRL(t.pending)}</strong>
-              <span className="hint">
-                {formatMoneyBRL(mRate)}/km · pendente · acertado{" "}
-                {formatMoneyBRL(t.settled)} · ganho {formatMoneyBRL(t.earned)}
-              </span>
+              <strong className="finance-earned">
+                {formatMoneyBRL(t.earned)}
+              </strong>
+              <div className="finance-chip-row">
+                <span className="finance-chip open">
+                  Em aberto {formatMoneyBRL(t.pending)}
+                </span>
+                <span className="finance-chip paid">
+                  Acertado {formatMoneyBRL(t.settled)}
+                </span>
+              </div>
+              <span className="hint">{formatMoneyBRL(mRate)}/km</span>
             </div>
           );
         })}
@@ -441,13 +477,24 @@ export function FinanceAdmin({ data, onChange }: Props) {
               const moto = data.motoboys.find((m) => m.id === e.motoboyId);
               const name = moto?.name || "Motoboy";
               return (
-                <div className="motoboy-item finance-item" key={e.id}>
+                <div
+                  className={`motoboy-item finance-item finance-entry ${
+                    e.status === "open" ? "is-open" : "is-paid"
+                  }`}
+                  key={e.id}
+                >
                   <div>
                     <strong>
                       {name} · {formatMoneyBRL(e.amount)}
                     </strong>
                     <div className="hint">
-                      {e.status === "open" ? "Pendente" : "Acertado / pago"}
+                      <span
+                        className={`finance-chip ${
+                          e.status === "open" ? "open" : "paid"
+                        }`}
+                      >
+                        {e.status === "open" ? "Em aberto" : "Acertado"}
+                      </span>
                       {e.paymentMethod
                         ? ` · ${payMethodLabel(e.paymentMethod)}`
                         : ""}

@@ -1,10 +1,10 @@
 /* Gerado automaticamente no build — não edite. */
 export const BUILD_INFO = {
-  version: "2026.09.24-0f7cf1f",
-  display: "0.2.0+0f7cf1f",
-  commit: "0f7cf1f",
-  commitFull: "0f7cf1ff7d65155ae86973c5288b7b1096687151",
-  message: "Stop auto-save from deleting addresses and other catalog data.",
-  builtAt: "2026-09-24T19:57:13.134Z",
+  version: "2026.09.25-b53c22d",
+  display: "0.2.0+b53c22d",
+  commit: "b53c22d",
+  commitFull: "b53c22d04e8df4dc463cc98f0e270ed4d9b38910",
+  message: "Recover address catalog from route stops and drop unique address index.",
+  builtAt: "2026-09-25T20:09:41.874Z",
   packageVersion: "0.2.0",
 } as const;

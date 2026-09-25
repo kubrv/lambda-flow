@@ -122,9 +122,13 @@ export function AuthScreen({
     }
   }
 
-  const loginReady =
+      const loginReady =
     mode === "first-access"
-      ? Boolean(login.trim() && accessCode.trim() && password.length >= 6)
+      ? Boolean(
+          login.trim() &&
+            accessCode.trim().length === 4 &&
+            password.length >= 6,
+        )
       : Boolean((role === "motoboy" ? login : email).trim() && password);
 
   return (
@@ -132,9 +136,9 @@ export function AuthScreen({
       <div className="auth-card">
         <BrandLogo height={48} />
         <p className="lede">
-          Motoboy: entre com usuário ou e-mail. No 1º acesso use o código da
-          empresa, ou a senha que o admin criou. Depois você pode alterar a
-          senha no perfil.
+          Motoboy: entre com usuário. No 1º acesso use a senha de 4 dígitos da
+          empresa e crie sua senha definitiva. Depois você pode alterar no
+          perfil.
         </p>
         {onBack ? (
           <button type="button" className="btn ghost" onClick={onBack}>
@@ -236,17 +240,20 @@ export function AuthScreen({
 
           {mode === "first-access" && role === "motoboy" ? (
             <div className="field">
-              <label>Código de 1º acesso</label>
+              <label>Senha provisória (4 dígitos)</label>
               <input
                 name="lf-access-code"
                 value={accessCode}
-                onChange={(e) => setAccessCode(e.target.value.toUpperCase())}
-                placeholder="Código que a empresa passou"
+                onChange={(e) =>
+                  setAccessCode(e.target.value.replace(/\D/g, "").slice(0, 4))
+                }
+                placeholder="Ex: 4821"
+                inputMode="numeric"
                 autoComplete="off"
               />
               <p className="hint">
-                Só você cria a senha. A empresa pode alterar depois, mas nunca vê
-                a senha.
+                Código que a empresa gerou. Em seguida você cria a senha
+                definitiva (mín. 6 caracteres).
               </p>
             </div>
           ) : null}

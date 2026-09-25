@@ -24,6 +24,7 @@ import { getSupabase, isSupabaseConfigured } from "./lib/supabase";
 import { loadData, saveData } from "./lib/storage";
 import type { AppData } from "./lib/types";
 import { getRoute } from "./lib/types";
+import { logCompanyAccess } from "./components/admin/AccessHistoryPanel";
 
 export default function App() {
   const today = localDateKey();
@@ -41,6 +42,7 @@ export default function App() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [gate, setGate] = useState<"landing" | "auth" | "signup">("landing");
   const skipFirstSave = useRef(true);
+  const accessLogged = useRef<string | null>(null);
 
   const refreshAuth = useCallback(async () => {
     if (!isSupabaseConfigured()) {
@@ -63,7 +65,19 @@ export default function App() {
       if (p?.companyId) {
         const c = await fetchCompany(p.companyId);
         setCompany(c);
-        if (p.role === "company") setView("admin");
+        if (p.role === "company") {
+          setView("admin");
+          if (accessLogged.current !== p.userId) {
+            accessLogged.current = p.userId;
+            void logCompanyAccess({
+              companyId: p.companyId,
+              userId: p.userId,
+              email: p.email,
+              fullName: p.fullName,
+              event: "login",
+            });
+          }
+        }
       } else {
         setCompany(null);
       }

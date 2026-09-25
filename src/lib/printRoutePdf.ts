@@ -14,6 +14,7 @@ import {
   DEFAULT_PRICE_PER_KM,
   normalizeBoxes,
   resolveStopKinds,
+  resolveStopNotes,
   totalBoxes,
 } from "./types";
 
@@ -81,7 +82,7 @@ export function printDayRoutePdf(input: {
   const stopsHtml = input.route.stops
     .map((stop, index) => {
       const kinds = resolveStopKinds(stop);
-      const notes = stop.notes?.trim();
+      const notes = resolveStopNotes(stop);
       const boxes = normalizeBoxes(stop.boxes);
       const point = pointFromCoords(stop.lat, stop.lng, stop.address);
       const complement = stop.complement?.trim();
@@ -93,10 +94,27 @@ export function printDayRoutePdf(input: {
         kinds.includes("retirada")
           ? `<span class="tag retirada">Retirada</span>`
           : "",
-        `<span class="boxes-qty">${boxes} ${boxes === 1 ? "caixa" : "caixas"}</span>`,
+        boxes > 0
+          ? `<span class="boxes-qty">${boxes} ${
+              boxes === 1 ? "caixa a entregar" : "caixas a entregar"
+            }</span>`
+          : "",
       ]
         .filter(Boolean)
         .join(" ");
+
+      const notesHtml = [
+        notes.entrega
+          ? `<div class="notes"><strong>Obs. entrega:</strong> ${esc(
+              notes.entrega,
+            ).replace(/\n/g, "<br/>")}</div>`
+          : "",
+        notes.retirada
+          ? `<div class="notes"><strong>Obs. retirada:</strong> ${esc(
+              notes.retirada,
+            ).replace(/\n/g, "<br/>")}</div>`
+          : "",
+      ].join("");
 
       return `
         <tr>
@@ -111,11 +129,7 @@ export function printDayRoutePdf(input: {
             }
             <div class="extra"><strong>Horário:</strong> ${esc(hoursLabel)}</div>
             <div class="meta">${tags}</div>
-            ${
-              notes
-                ? `<div class="notes"><strong>Obs:</strong> ${esc(notes).replace(/\n/g, "<br/>")}</div>`
-                : ""
-            }
+            ${notesHtml}
             ${navButtonsHtml(
               googleMapsNavigateToUrl(point),
               wazeNavigateUrl(point),
@@ -182,7 +196,7 @@ export function printDayRoutePdf(input: {
   }
 
   <div class="boxes-banner">
-    <span>Total de caixas</span>
+    <span>Total de caixas a serem entregues</span>
     <strong class="boxes-qty">${boxesSum}</strong>
   </div>
 

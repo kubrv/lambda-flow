@@ -1,5 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import { formatDateLabel } from "../../lib/dates";
+import {
+  dateKeysInMonth,
+  formatDateLabel,
+  formatDateShort,
+  localDateKey,
+} from "../../lib/dates";
 import {
   removeAutoRouteFinance,
   upsertAutoRouteFinance,
@@ -19,16 +24,19 @@ import type {
   AppData,
   DayRoute,
   SavedAddress,
+  Stop,
   StopKind,
   StopKindFlags,
 } from "../../lib/types";
 import {
   DEFAULT_PRICE_PER_KM,
   createId,
+  emptyRoute,
   flagsToStopKinds,
   getRoute,
   normalizeBoxes,
   resolveStopKinds,
+  resolveStopNotes,
   stopKindsToFlags,
   totalBoxes,
 } from "../../lib/types";
@@ -38,6 +46,8 @@ import { AddressLookupField } from "./AddressLookupField";
 type Props = {
   data: AppData;
   date: string;
+  year?: number;
+  monthIndex?: number;
   onChange: (next: AppData) => void;
   actorName?: string;
 };
@@ -50,7 +60,8 @@ const DEFAULT_FLAGS: StopKindFlags = { entrega: true, retirada: false };
 function hydrateFromRoute(route: DayRoute, addresses: SavedAddress[]) {
   const selectedIds: string[] = [];
   const stopKinds: Record<string, StopKindFlags> = {};
-  const stopNotes: Record<string, string> = {};
+  const stopNotesEntrega: Record<string, string> = {};
+  const stopNotesRetirada: Record<string, string> = {};
   const stopBoxes: Record<string, number> = {};
 
   for (const s of route.stops) {
@@ -62,14 +73,29 @@ function hydrateFromRoute(route: DayRoute, addresses: SavedAddress[]) {
     if (!id) continue;
     selectedIds.push(id);
     stopKinds[id] = stopKindsToFlags(resolveStopKinds(s));
-    if (s.notes) stopNotes[id] = s.notes;
+    const notes = resolveStopNotes(s);
+    if (notes.entrega) stopNotesEntrega[id] = notes.entrega;
+    if (notes.retirada) stopNotesRetirada[id] = notes.retirada;
     stopBoxes[id] = normalizeBoxes(s.boxes);
   }
 
-  return { selectedIds, stopKinds, stopNotes, stopBoxes };
+  return {
+    selectedIds,
+    stopKinds,
+    stopNotesEntrega,
+    stopNotesRetirada,
+    stopBoxes,
+  };
 }
 
-export function RouteEditor({ data, date, onChange, actorName = "Admin" }: Props) {
+export function RouteEditor({
+  data,
+  date,
+  year,
+  monthIndex,
+  onChange,
+  actorName = "Admin",
+}: Props) {
   const saved = getRoute(data, date);
   const dayLabel = formatDateLabel(date);
   const preset = resolvePresetStart(data);
@@ -79,6 +105,8 @@ export function RouteEditor({ data, date, onChange, actorName = "Admin" }: Props
     saved.motoboyCompletedBy ||
     data.motoboys.find((m) => m.id === saved.motoboyId)?.name ||
     "";
+  const calYear = year ?? Number(date.slice(0, 4));
+  const calMonth = monthIndex ?? Number(date.slice(5, 7)) - 1;
 
   const [startMode, setStartMode] = useState<StartMode>("default");
   const [startAddress, setStartAddress] = useState(preset.address);
@@ -87,11 +115,18 @@ export function RouteEditor({ data, date, onChange, actorName = "Admin" }: Props
   const [motoboyId, setMotoboyId] = useState("");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [stopKinds, setStopKinds] = useState<Record<string, StopKindFlags>>({});
-  const [stopNotes, setStopNotes] = useState<Record<string, string>>({});
+  const [stopNotesEntrega, setStopNotesEntrega] = useState<
+    Record<string, string>
+  >({});
+  const [stopNotesRetirada, setStopNotesRetirada] = useState<
+    Record<string, string>
+  >({});
   const [stopBoxes, setStopBoxes] = useState<Record<string, number>>({});
   const [returnToStart, setReturnToStart] = useState(true);
   const [filter, setFilter] = useState("");
-  const [addrSort, setAddrSort] = useState<"added" | "alpha">("added");
+  const [addrSort, setAddrSort] = useState<"added" | "alpha">("alpha");
+  const [showAddPicker, setShowAddPicker] = useState(false);
+  const [moveTarget, setMoveTarget] = useState<Record<string, string>>({});
   const [status, setStatus] = useState<Status>({ kind: "idle", text: "" });
   const [formEpoch, setFormEpoch] = useState(0);
   const [liveKm, setLiveKm] = useState(0);
@@ -122,11 +157,14 @@ export function RouteEditor({ data, date, onChange, actorName = "Admin" }: Props
     const h = hydrateFromRoute(route, data.addresses);
     setSelectedIds(h.selectedIds);
     setStopKinds(h.stopKinds);
-    setStopNotes(h.stopNotes);
+    setStopNotesEntrega(h.stopNotesEntrega);
+    setStopNotesRetirada(h.stopNotesRetirada);
     setStopBoxes(h.stopBoxes);
     setLiveKm(Number(route.totalKm) || 0);
     setExpandedIds([]);
     setFilter("");
+    setShowAddPicker(false);
+    setMoveTarget({});
     // eslint-disable-next-line react-hooks/exhaustive-deps -- intencional
   }, [date, formEpoch]);
 
@@ -224,7 +262,7 @@ export function RouteEditor({ data, date, onChange, actorName = "Admin" }: Props
                 label: cleanNickname(a.label, a.address),
                 kinds,
                 kind: kinds.length === 1 ? kinds[0] : undefined,
-                notes: stopNotes[a.id] || undefined,
+                ...notesFor(a.id),
                 boxes: normalizeBoxes(stopBoxes[a.id]),
                 complement: a.complement?.trim() || undefined,
                 hours: a.hours,
@@ -264,6 +302,16 @@ export function RouteEditor({ data, date, onChange, actorName = "Admin" }: Props
     return { address: startAddress.trim(), lat: startLat, lng: startLng };
   }
 
+  function notesFor(id: string) {
+    const entrega = (stopNotesEntrega[id] || "").trim();
+    const retirada = (stopNotesRetirada[id] || "").trim();
+    return {
+      notesEntrega: entrega || undefined,
+      notesRetirada: retirada || undefined,
+      notes: entrega || retirada || undefined,
+    };
+  }
+
   function toggleAddress(id: string) {
     setSelectedIds((prev) => {
       if (prev.includes(id)) {
@@ -272,7 +320,12 @@ export function RouteEditor({ data, date, onChange, actorName = "Admin" }: Props
           delete n[id];
           return n;
         });
-        setStopNotes((n) => {
+        setStopNotesEntrega((n) => {
+          const x = { ...n };
+          delete x[id];
+          return x;
+        });
+        setStopNotesRetirada((n) => {
           const x = { ...n };
           delete x[id];
           return x;
@@ -287,9 +340,88 @@ export function RouteEditor({ data, date, onChange, actorName = "Admin" }: Props
       }
       setStopKinds((k) => ({ ...k, [id]: k[id] || { ...DEFAULT_FLAGS } }));
       setStopBoxes((b) => ({ ...b, [id]: b[id] ?? 0 }));
-      // Não abre painel de detalhes automaticamente
+      setShowAddPicker(false);
+      setExpandedIds((e) => (e.includes(id) ? e : [...e, id]));
       return [...prev, id];
     });
+  }
+
+  function moveStopToDate(addressId: string, targetDate: string) {
+    if (!targetDate || targetDate === date) {
+      setStatus({ kind: "err", text: "Escolha outro dia no calendário." });
+      return;
+    }
+    if (locked) {
+      setStatus({
+        kind: "err",
+        text: "Rota concluída — reabra para mover endereços.",
+      });
+      return;
+    }
+    const addr = data.addresses.find((a) => a.id === addressId);
+    if (!addr) return;
+    const kinds = flagsToStopKinds(stopKinds[addressId] || DEFAULT_FLAGS);
+    const n = notesFor(addressId);
+    const stop: Stop = {
+      id: createId(),
+      addressId,
+      address: addr.address,
+      label: cleanNickname(addr.label, addr.address),
+      kinds,
+      kind: kinds.length === 1 ? kinds[0] : undefined,
+      notes: n.notes,
+      notesEntrega: n.notesEntrega,
+      notesRetirada: n.notesRetirada,
+      boxes: normalizeBoxes(stopBoxes[addressId]),
+      complement: addr.complement?.trim() || undefined,
+      hours: addr.hours,
+      lat: addr.lat,
+      lng: addr.lng,
+    };
+
+    const target = getRoute(data, targetDate);
+    const targetStops = target.stops.filter(
+      (s) =>
+        s.addressId !== addressId &&
+        normalizeAddress(s.address) !== normalizeAddress(addr.address),
+    );
+    const nextTarget: DayRoute = {
+      ...emptyRoute(targetDate),
+      ...target,
+      date: targetDate,
+      stops: [...targetStops, stop],
+      // Mantém km antigo até reotimizar o dia destino
+      totalKm: target.totalKm || 0,
+      optimizedAt: target.optimizedAt,
+    };
+
+    const current = getRoute(data, date);
+    const nextCurrentStops = current.stops.filter(
+      (s) =>
+        s.addressId !== addressId &&
+        normalizeAddress(s.address) !== normalizeAddress(addr.address),
+    );
+    const nextCurrent: DayRoute = {
+      ...current,
+      date,
+      stops: nextCurrentStops,
+    };
+
+    const routesByDate = { ...data.routesByDate };
+    if (nextCurrentStops.length || nextCurrent.startAddress.trim()) {
+      routesByDate[date] = nextCurrent;
+    } else {
+      delete routesByDate[date];
+    }
+    routesByDate[targetDate] = nextTarget;
+
+    onChange({ ...data, routesByDate });
+    toggleAddress(addressId);
+    setStatus({
+      kind: "ok",
+      text: `Endereço movido para ${formatDateShort(targetDate)} (com observações). Reotimize aquele dia se precisar.`,
+    });
+    setFormEpoch((n) => n + 1);
   }
 
   function toggleExpanded(id: string) {
@@ -411,7 +543,7 @@ export function RouteEditor({ data, date, onChange, actorName = "Admin" }: Props
             label: cleanNickname(a.label, a.address),
             kinds,
             kind: kinds.length === 1 ? kinds[0] : undefined,
-            notes: stopNotes[a.id] || undefined,
+            ...notesFor(a.id),
             boxes: normalizeBoxes(stopBoxes[a.id]),
             complement: a.complement?.trim() || undefined,
             hours: a.hours,
@@ -461,8 +593,16 @@ export function RouteEditor({ data, date, onChange, actorName = "Admin" }: Props
           label: savedAddr.label,
           kinds,
           kind: kinds.length === 1 ? kinds[0] : undefined,
+          notesEntrega:
+            (matched && notesFor(matched.id).notesEntrega) ||
+            s.notesEntrega ||
+            undefined,
+          notesRetirada:
+            (matched && notesFor(matched.id).notesRetirada) ||
+            s.notesRetirada ||
+            undefined,
           notes:
-            (matched && stopNotes[matched.id]) || s.notes || undefined,
+            (matched && notesFor(matched.id).notes) || s.notes || undefined,
           boxes: normalizeBoxes(
             (matched && stopBoxes[matched.id]) ?? s.boxes,
           ),
@@ -676,107 +816,167 @@ export function RouteEditor({ data, date, onChange, actorName = "Admin" }: Props
             <strong>{selectedIds.length}</strong>
           </div>
           <div>
-            <label>Caixas</label>
+            <label>Caixas a entregar</label>
             <strong>{draftBoxesTotal}</strong>
           </div>
         </div>
 
-        <div className="addr-list-toolbar">
-          <div className="field" style={{ flex: 1, minWidth: "10rem" }}>
-            <label htmlFor="filter">
-              Endereços ({selectedIds.length} selecionados)
-            </label>
-            <input
-              id="filter"
-              value={filter}
-              onChange={(e) => setFilter(e.target.value)}
-              placeholder="Filtrar por apelido…"
-            />
+        <div className="route-stops-head">
+          <div>
+            <h3 className="route-stops-title">
+              Paradas da rota ({selectedIds.length})
+            </h3>
+            <p className="hint" style={{ margin: 0 }}>
+              Só entram na rota os endereços que você adicionar. Detalhes e
+              observações ficam em cada parada.
+            </p>
           </div>
-          <div className="field">
-            <label htmlFor="route-addr-sort">Ordenar</label>
-            <select
-              id="route-addr-sort"
-              value={addrSort}
-              onChange={(e) =>
-                setAddrSort(e.target.value as "added" | "alpha")
-              }
-            >
-              <option value="added">Ordem de adição</option>
-              <option value="alpha">Alfabética</option>
-            </select>
-          </div>
+          <button
+            type="button"
+            className="btn primary"
+            disabled={locked}
+            onClick={() => setShowAddPicker((v) => !v)}
+          >
+            {showAddPicker ? "Fechar busca" : "Adicionar endereço"}
+          </button>
         </div>
 
-        <div className="address-checklist tall">
-          {filtered.length === 0 ? (
-            <div className="empty">
-              Cadastre endereços na aba Endereços do painel.
+        {showAddPicker ? (
+          <div className="route-addr-picker">
+            <div className="addr-list-toolbar">
+              <div className="field" style={{ flex: 1, minWidth: "10rem" }}>
+                <label htmlFor="filter">Buscar no cadastro</label>
+                <input
+                  id="filter"
+                  value={filter}
+                  onChange={(e) => setFilter(e.target.value)}
+                  placeholder="Apelido ou endereço…"
+                  autoFocus
+                />
+              </div>
+              <div className="field">
+                <label htmlFor="route-addr-sort">Ordenar</label>
+                <select
+                  id="route-addr-sort"
+                  value={addrSort}
+                  onChange={(e) =>
+                    setAddrSort(e.target.value as "added" | "alpha")
+                  }
+                >
+                  <option value="alpha">Alfabética</option>
+                  <option value="added">Ordem de adição</option>
+                </select>
+              </div>
+            </div>
+            <div className="route-addr-picker-list">
+              {filtered.filter((a) => !selectedIds.includes(a.id)).length ===
+              0 ? (
+                <div className="empty">
+                  {filter.trim()
+                    ? "Nenhum endereço encontrado."
+                    : "Todos os endereços ativos já estão na rota."}
+                </div>
+              ) : (
+                filtered
+                  .filter((a) => !selectedIds.includes(a.id))
+                  .map((a) => {
+                    const nick = cleanNickname(a.label, a.address);
+                    return (
+                      <button
+                        key={a.id}
+                        type="button"
+                        className="route-addr-pick-item"
+                        onClick={() => toggleAddress(a.id)}
+                      >
+                        <span className="route-addr-pick-plus" aria-hidden>
+                          +
+                        </span>
+                        <span>
+                          <strong>{nick}</strong>
+                          {a.active === false ? (
+                            <small className="addr-extra-hint">Inativo</small>
+                          ) : null}
+                          <small className="addr-extra-hint">{a.address}</small>
+                        </span>
+                      </button>
+                    );
+                  })
+              )}
+            </div>
+          </div>
+        ) : null}
+
+        <div className="route-stops-list">
+          {selectedIds.length === 0 ? (
+            <div className="empty route-stops-empty">
+              Nenhuma parada ainda. Clique em <strong>Adicionar endereço</strong>.
             </div>
           ) : (
-            filtered.map((a) => {
-              const selected = selectedIds.includes(a.id);
+            selectedIds
+              .map((id) => data.addresses.find((a) => a.id === id))
+              .filter((a): a is SavedAddress => Boolean(a))
+              .sort((a, b) =>
+                cleanNickname(a.label, a.address).localeCompare(
+                  cleanNickname(b.label, b.address),
+                  "pt-BR",
+                  { sensitivity: "base" },
+                ),
+              )
+              .map((a) => {
               const expanded = expandedIds.includes(a.id);
               const flags = stopKinds[a.id] || DEFAULT_FLAGS;
               const nick = cleanNickname(a.label, a.address);
+              const n = notesFor(a.id);
               const hasExtras =
-                Boolean(stopNotes[a.id]?.trim()) ||
+                Boolean(n.notesEntrega || n.notesRetirada) ||
                 normalizeBoxes(stopBoxes[a.id]) > 0 ||
                 flags.retirada ||
                 !flags.entrega;
+              const monthKeys = dateKeysInMonth(calYear, calMonth).filter(
+                (k) => k !== date,
+              );
               return (
                 <div
                   key={a.id}
-                  className={`address-check-row${selected ? " selected" : ""}${
-                    expanded ? " expanded" : ""
-                  }${a.active === false ? " addr-inactive" : ""}`}
+                  className={`route-stop-card${expanded ? " expanded" : ""}`}
                 >
-                  <div className="address-check-main">
-                    <label className="address-check">
-                      <input
-                        type="checkbox"
-                        checked={selected}
-                        onChange={() => toggleAddress(a.id)}
-                      />
-                      <span>
-                        <strong>{nick}</strong>
-                        {a.active === false ? (
-                          <small className="addr-extra-hint">Inativo</small>
-                        ) : null}
-                        {selected && hasExtras && !expanded ? (
-                          <small className="addr-extra-hint">
-                            {[
-                              flags.entrega ? "Entrega" : null,
-                              flags.retirada ? "Retirada" : null,
-                              normalizeBoxes(stopBoxes[a.id]) > 0
-                                ? `${normalizeBoxes(stopBoxes[a.id])} cx`
-                                : null,
-                            ]
-                              .filter(Boolean)
-                              .join(" · ")}
-                          </small>
-                        ) : null}
-                      </span>
-                    </label>
-                    {selected ? (
+                  <div className="route-stop-card-main">
+                    <div>
+                      <strong>{nick}</strong>
+                      {!expanded && hasExtras ? (
+                        <small className="addr-extra-hint">
+                          {[
+                            flags.entrega ? "Entrega" : null,
+                            flags.retirada ? "Retirada" : null,
+                            normalizeBoxes(stopBoxes[a.id]) > 0
+                              ? `${normalizeBoxes(stopBoxes[a.id])} cx`
+                              : null,
+                          ]
+                            .filter(Boolean)
+                            .join(" · ")}
+                        </small>
+                      ) : null}
+                    </div>
+                    <div className="route-stop-card-actions">
                       <button
                         type="button"
                         className={`addr-expand-btn big${expanded ? " open" : ""}`}
                         aria-expanded={expanded}
                         onClick={() => toggleExpanded(a.id)}
                       >
-                        <span aria-hidden className="addr-expand-chevron">
-                          {expanded ? "▾" : "▸"}
-                        </span>
-                        <span className="addr-expand-label">
-                          {expanded
-                            ? "Fechar detalhes"
-                            : "Abrir detalhes"}
-                        </span>
+                        {expanded ? "Fechar" : "Detalhes"}
                       </button>
-                    ) : null}
+                      <button
+                        type="button"
+                        className="btn danger ghost"
+                        disabled={locked}
+                        onClick={() => toggleAddress(a.id)}
+                      >
+                        Remover
+                      </button>
+                    </div>
                   </div>
-                  {selected && expanded ? (
+                  {expanded ? (
                     <div className="stop-extra">
                       <div className="kind-toggles" role="group" aria-label="Tipo">
                         <button
@@ -796,7 +996,7 @@ export function RouteEditor({ data, date, onChange, actorName = "Admin" }: Props
                       </div>
                       <div className="stop-extra-row">
                         <label className="boxes-field">
-                          <span>Caixas</span>
+                          <span>Caixas a serem entregues</span>
                           <input
                             type="number"
                             min={0}
@@ -812,21 +1012,77 @@ export function RouteEditor({ data, date, onChange, actorName = "Admin" }: Props
                           />
                         </label>
                       </div>
-                      <label className="notes-field">
-                        <span>Observações</span>
-                        <textarea
-                          className="notes-input"
-                          rows={3}
-                          value={stopNotes[a.id] || ""}
-                          onChange={(e) =>
-                            setStopNotes((prev) => ({
-                              ...prev,
-                              [a.id]: e.target.value,
-                            }))
+                      {flags.entrega ? (
+                        <label className="notes-field">
+                          <span>Observações da entrega</span>
+                          <textarea
+                            className="notes-input"
+                            rows={2}
+                            value={stopNotesEntrega[a.id] || ""}
+                            onChange={(e) =>
+                              setStopNotesEntrega((prev) => ({
+                                ...prev,
+                                [a.id]: e.target.value,
+                              }))
+                            }
+                            placeholder="Obs. só da entrega (opcional)"
+                          />
+                        </label>
+                      ) : null}
+                      {flags.retirada ? (
+                        <label className="notes-field">
+                          <span>Observações da retirada</span>
+                          <textarea
+                            className="notes-input"
+                            rows={2}
+                            value={stopNotesRetirada[a.id] || ""}
+                            onChange={(e) =>
+                              setStopNotesRetirada((prev) => ({
+                                ...prev,
+                                [a.id]: e.target.value,
+                              }))
+                            }
+                            placeholder="Obs. só da retirada (opcional)"
+                          />
+                        </label>
+                      ) : null}
+                      <div className="move-stop-row">
+                        <label className="field" style={{ flex: 1 }}>
+                          <span>Mover para outro dia</span>
+                          <select
+                            value={moveTarget[a.id] || ""}
+                            onChange={(e) =>
+                              setMoveTarget((prev) => ({
+                                ...prev,
+                                [a.id]: e.target.value,
+                              }))
+                            }
+                            disabled={locked}
+                          >
+                            <option value="">Escolher data…</option>
+                            {monthKeys.map((k) => (
+                              <option key={k} value={k}>
+                                {formatDateShort(k)}
+                                {k === localDateKey() ? " (hoje)" : ""}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <button
+                          type="button"
+                          className="btn"
+                          disabled={locked || !moveTarget[a.id]}
+                          onClick={() =>
+                            moveStopToDate(a.id, moveTarget[a.id] || "")
                           }
-                          placeholder="Texto livre (opcional)"
-                        />
-                      </label>
+                        >
+                          Mover
+                        </button>
+                      </div>
+                      <p className="hint">
+                        Leva entrega/retirada, caixas e observações para o dia
+                        escolhido.
+                      </p>
                     </div>
                   ) : null}
                 </div>
@@ -847,7 +1103,7 @@ export function RouteEditor({ data, date, onChange, actorName = "Admin" }: Props
           <button
             type="button"
             className="btn danger"
-            onClick={clearRoute}
+            onClick={() => void clearRoute()}
             disabled={status.kind === "busy"}
           >
             Limpar rota
@@ -872,7 +1128,7 @@ export function RouteEditor({ data, date, onChange, actorName = "Admin" }: Props
             )}
           </strong>
           {" · "}
-          Caixas:{" "}
+          Caixas a entregar:{" "}
           <strong className="boxes-total-inline">{draftBoxesTotal}</strong>
           {saved.stops.length ? (
             <>

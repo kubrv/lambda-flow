@@ -71,14 +71,30 @@ export type Stop = {
   label?: string;
   kind?: StopKind;
   kinds?: StopKind[];
+  /** @deprecated use notesEntrega / notesRetirada */
   notes?: string;
-  /** Quantidade de caixas neste endereço. */
+  notesEntrega?: string;
+  notesRetirada?: string;
+  /** Quantidade de caixas a serem entregues neste endereço. */
   boxes?: number;
   complement?: string;
   hours?: HoursPeriod[];
   lat: number | null;
   lng: number | null;
 };
+
+/** Normaliza observações legadas (notes único) para os dois campos. */
+export function resolveStopNotes(stop: {
+  notes?: string | null;
+  notesEntrega?: string | null;
+  notesRetirada?: string | null;
+}): { entrega: string; retirada: string } {
+  const entrega = (stop.notesEntrega || "").trim();
+  const retirada = (stop.notesRetirada || "").trim();
+  if (entrega || retirada) return { entrega, retirada };
+  const legacy = (stop.notes || "").trim();
+  return { entrega: legacy, retirada: "" };
+}
 
 export function resolveStopKinds(stop: {
   kind?: string | null;

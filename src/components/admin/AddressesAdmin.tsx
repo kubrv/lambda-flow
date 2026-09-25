@@ -90,7 +90,7 @@ function splitStoredAddress(address: string): {
 
 export function AddressesAdmin({ data, onChange }: Props) {
   const [showAdd, setShowAdd] = useState(false);
-  const [sortMode, setSortMode] = useState<SortMode>("added");
+  const [sortMode, setSortMode] = useState<SortMode>("alpha");
   const [listFilter, setListFilter] = useState("");
   const [showInactive, setShowInactive] = useState(false);
   const [mode, setMode] = useState<InputMode>("typed");
@@ -795,8 +795,8 @@ export function AddressesAdmin({ data, onChange }: Props) {
               value={sortMode}
               onChange={(e) => setSortMode(e.target.value as SortMode)}
             >
-              <option value="added">Ordem de adição</option>
               <option value="alpha">Alfabética (apelido)</option>
+              <option value="added">Ordem de adição</option>
             </select>
           </div>
           <div className="field">

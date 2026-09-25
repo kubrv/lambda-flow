@@ -15,6 +15,7 @@ import {
   DEFAULT_PRICE_PER_KM,
   FALLBACK_START_ADDRESS,
   resolveStopKinds,
+  resolveStopNotes,
   normalizeBoxes,
 } from "./types";
 import { normalizeAddress } from "./parseAddress";
@@ -97,11 +98,14 @@ function mapStops(stops: Stop[] | null | undefined): Stop[] {
   if (!Array.isArray(stops)) return [];
   return stops.map((s) => {
     const kinds = resolveStopKinds(s);
+    const notes = resolveStopNotes(s);
     return {
       ...s,
       kinds,
       kind: kinds.length === 1 ? kinds[0] : undefined,
-      notes: s.notes || undefined,
+      notes: notes.entrega || notes.retirada || undefined,
+      notesEntrega: notes.entrega || undefined,
+      notesRetirada: notes.retirada || undefined,
       boxes: normalizeBoxes(s.boxes),
       complement: s.complement?.trim() || undefined,
       hours: s.hours?.length
