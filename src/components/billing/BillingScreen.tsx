@@ -59,7 +59,7 @@ export function BillingScreen({ company, onRefresh }: Props) {
 
   return (
     <section className="panel billing-panel">
-      <h2>Plano Lambda-Flow</h2>
+      <h2>Plano Rotaz</h2>
       <p className="lede">
         Só a empresa paga. Motoboys entram de graça com 1º acesso (código + senha).
         Plano padrão: <strong>{formatMoneyBRL(price)}/mês</strong>.

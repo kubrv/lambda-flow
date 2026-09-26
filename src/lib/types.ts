@@ -48,6 +48,8 @@ export type SavedAddress = {
   address: string;
   /** Ex.: sala, andar, portão — ajuda o motoboy a achar. */
   complement?: string;
+  /** WhatsApp do destino (dentista) — aviso de entrega. */
+  whatsapp?: string;
   /** Horários de funcionamento (padrão 9–12 e 13–17). */
   hours?: HoursPeriod[];
   lat: number | null;
@@ -64,6 +66,12 @@ export type StopKindFlags = {
   retirada: boolean;
 };
 
+/** Resultado da visita do boy neste endereço. */
+export type StopVisitOutcome =
+  | "ok"
+  | "destinatario_ausente"
+  | "consultorio_fechado";
+
 export type Stop = {
   id: string;
   addressId?: string | null;
@@ -77,6 +85,10 @@ export type Stop = {
   notesRetirada?: string;
   /** Quantidade de caixas a serem entregues neste endereço. */
   boxes?: number;
+  /** WhatsApp do destino (copiado do cadastro na montagem da rota). */
+  whatsapp?: string;
+  /** ok = entregue/retirado; ausente / consultório fechado. */
+  visitOutcome?: StopVisitOutcome | null;
   complement?: string;
   hours?: HoursPeriod[];
   lat: number | null;

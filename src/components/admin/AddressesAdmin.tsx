@@ -99,6 +99,7 @@ export function AddressesAdmin({ data, onChange }: Props) {
   const [houseNumber, setHouseNumber] = useState("");
   const [city, setCity] = useState("São Paulo");
   const [complement, setComplement] = useState("");
+  const [whatsapp, setWhatsapp] = useState("");
   const [hours, setHours] = useState<HoursPeriod[]>(() => cloneDefaultHours());
   const [mapsLink, setMapsLink] = useState("");
   const [verify, setVerify] = useState<VerifyState>({ status: "idle" });
@@ -109,6 +110,7 @@ export function AddressesAdmin({ data, onChange }: Props) {
   const [editNumber, setEditNumber] = useState("");
   const [editCity, setEditCity] = useState("São Paulo");
   const [editComplement, setEditComplement] = useState("");
+  const [editWhatsapp, setEditWhatsapp] = useState("");
   const [editHours, setEditHours] = useState<HoursPeriod[]>(() =>
     cloneDefaultHours(),
   );
@@ -209,6 +211,7 @@ export function AddressesAdmin({ data, onChange }: Props) {
     setHouseNumber("");
     setCity("São Paulo");
     setComplement("");
+    setWhatsapp("");
     setHours(cloneDefaultHours());
     setMapsLink("");
     setVerify({ status: "idle" });
@@ -271,6 +274,7 @@ export function AddressesAdmin({ data, onChange }: Props) {
           "Endereço",
         address: addrText,
         complement: complement.trim(),
+        whatsapp: whatsapp.trim(),
         hours: normalizeHoursPeriods(hours),
         lat: okState.selected.lat,
         lng: okState.selected.lng,
@@ -300,6 +304,7 @@ export function AddressesAdmin({ data, onChange }: Props) {
     setEditNumber(parsed.number);
     setEditCity(parsed.city || "São Paulo");
     setEditComplement(a.complement || "");
+    setEditWhatsapp(a.whatsapp || "");
     setEditHours(normalizeHoursPeriods(a.hours));
     setEditLink("");
     if (a.lat != null && a.lng != null) {
@@ -343,6 +348,7 @@ export function AddressesAdmin({ data, onChange }: Props) {
     setEditNumber("");
     setEditCity("São Paulo");
     setEditComplement("");
+    setEditWhatsapp("");
     setEditHours(cloneDefaultHours());
     setEditLink("");
     setEditMapSnapshot(null);
@@ -446,6 +452,7 @@ export function AddressesAdmin({ data, onChange }: Props) {
         label: editLabel.trim() || addrText.split(",")[0].trim(),
         address: addrText,
         complement: editComplement.trim(),
+        whatsapp: editWhatsapp.trim(),
         hours: normalizeHoursPeriods(editHours),
         lat: okState.selected.lat,
         lng: okState.selected.lng,
@@ -738,6 +745,21 @@ export function AddressesAdmin({ data, onChange }: Props) {
               placeholder="Ex: Sala 12, 2º andar, portão azul, fundo"
             />
           </div>
+          <div className="field">
+            <label htmlFor="whatsapp">WhatsApp do dentista / destino</label>
+            <input
+              id="whatsapp"
+              value={whatsapp}
+              onChange={(e) => setWhatsapp(e.target.value)}
+              placeholder="(11) 99999-0000"
+              inputMode="tel"
+              autoComplete="tel"
+            />
+            <p className="hint">
+              O motoboy usa para avisar que a entrega chegou (abre o WhatsApp
+              com texto pronto).
+            </p>
+          </div>
           <HoursEditor hours={hours} onChange={setHours} />
         </div>
 
@@ -938,6 +960,15 @@ export function AddressesAdmin({ data, onChange }: Props) {
                           placeholder="Sala, andar, portão…"
                         />
                       </div>
+                      <div className="field">
+                        <label>WhatsApp do dentista / destino</label>
+                        <input
+                          value={editWhatsapp}
+                          onChange={(e) => setEditWhatsapp(e.target.value)}
+                          placeholder="(11) 99999-0000"
+                          inputMode="tel"
+                        />
+                      </div>
                       <HoursEditor hours={editHours} onChange={setEditHours} />
                     </div>
                     <div className="row-actions">
@@ -996,6 +1027,13 @@ export function AddressesAdmin({ data, onChange }: Props) {
                           Complemento: {a.complement.trim()}
                         </div>
                       ) : null}
+                      {a.whatsapp?.trim() ? (
+                        <div className="hint">
+                          WhatsApp: {a.whatsapp.trim()}
+                        </div>
+                      ) : (
+                        <div className="hint">WhatsApp: não cadastrado</div>
+                      )}
                       <div className="hint addr-hours">
                         Horário:{" "}
                         {formatHoursLabel(normalizeHoursPeriods(a.hours))}

@@ -465,6 +465,12 @@ export function MotoboysAdmin({ data, onChange }: Props) {
             const days = Object.values(data.routesByDate).filter(
               (r) => r.motoboyId === m.id,
             ).length;
+            const completedRoutes = Object.values(data.routesByDate).filter(
+              (r) =>
+                r.motoboyId === m.id &&
+                (r.completionStatus === "completed" ||
+                  r.completionStatus === "verified"),
+            ).length;
             const fin = motoboyFinanceSummary(data.finance, m.id);
             const rate = m.pricePerKm ?? DEFAULT_PRICE_PER_KM;
             const shownCode = accessCodes[m.id];
@@ -479,7 +485,10 @@ export function MotoboysAdmin({ data, onChange }: Props) {
                         {m.username ? `@${m.username}` : "sem usuário"}
                         {m.phone ? ` · ${m.phone}` : ""}
                         {" · "}
-                        {formatMoneyBRL(rate)}/km · {days} dia(s)
+                        {formatMoneyBRL(rate)}/km · {days} dia(s) ·{" "}
+                        {completedRoutes} rota
+                        {completedRoutes === 1 ? "" : "s"} concluída
+                        {completedRoutes === 1 ? "" : "s"}
                       </div>
                       <div className="hint">
                         Acesso:{" "}

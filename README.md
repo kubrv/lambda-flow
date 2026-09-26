@@ -1,4 +1,4 @@
-# Lambda-Flow
+# Rotaz
 
 Rotas diárias para motoboys — **Vercel** + **Supabase**, com km calculados pelas ruas.
 
@@ -31,6 +31,10 @@ No painel da Vercel, adicione:
 |----------|------|
 | `VITE_SUPABASE_URL` | Production / Preview |
 | `VITE_SUPABASE_ANON_KEY` | Production / Preview |
+| `WHATSAPP_TOKEN` | Production (Meta Cloud API) |
+| `WHATSAPP_PHONE_NUMBER_ID` | Production |
+| `WHATSAPP_TEMPLATE_NAME` | Production (ex.: `aviso_entrega`) |
+| `WHATSAPP_TEMPLATE_LANG` | Production (`pt_BR`) |
 
 Redeploy depois de salvar as envs.
 

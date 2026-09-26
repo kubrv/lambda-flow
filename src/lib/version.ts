@@ -27,4 +27,4 @@ export const APP_BUILD_TIME =
     : BUILD_INFO.builtAt;
 
 export const LEGAL_NOTICE =
-  "Lambda-Flow é uma ferramenta de apoio à logística. Km, rotas e valores são estimativas e podem divergir da realidade. O uso implica ciência das regras de privacidade e responsabilidade pelo tratamento de dados de endereços e colaboradores. © Lambda-Flow — todos os direitos reservados.";
+  "Rotaz é uma ferramenta de apoio à logística. Km, rotas e valores são estimativas e podem divergir da realidade. O uso implica ciência das regras de privacidade e responsabilidade pelo tratamento de dados de endereços e colaboradores. © Rotaz — todos os direitos reservados.";

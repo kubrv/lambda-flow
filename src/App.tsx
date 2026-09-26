@@ -75,6 +75,20 @@ export default function App() {
               email: p.email,
               fullName: p.fullName,
               event: "login",
+              role: "company",
+            });
+          }
+        } else if (p.role === "motoboy" && p.companyId) {
+          if (accessLogged.current !== p.userId) {
+            accessLogged.current = p.userId;
+            void logCompanyAccess({
+              companyId: p.companyId,
+              userId: p.userId,
+              email: p.email,
+              fullName: p.fullName,
+              event: "login",
+              role: "motoboy",
+              motoboyId: p.motoboyId,
             });
           }
         }
@@ -310,9 +324,11 @@ export default function App() {
             date={date}
             route={getRoute(data, date)}
             motoboys={data.motoboys}
+            addresses={data.addresses}
             pricePerKm={data.pricePerKm}
             role={isCompany ? "company" : "motoboy"}
             actorName={profile.fullName || profile.email || ""}
+            viewerMotoboyId={profile.motoboyId}
             onRouteChange={(next) => {
               setData({
                 ...data,

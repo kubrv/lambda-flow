@@ -1413,6 +1413,33 @@ a {
   background: rgba(51, 201, 255, 0.2);
 }
 
+.btn-whatsapp {
+  border-color: rgba(37, 211, 102, 0.5);
+  background: rgba(37, 211, 102, 0.16);
+  color: #9dffc0;
+}
+
+.btn-whatsapp:hover {
+  border-color: rgba(37, 211, 102, 0.75);
+  background: rgba(37, 211, 102, 0.28);
+}
+
+.btn-whatsapp:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}
+
+.btn-whatsapp-alt {
+  border-color: rgba(37, 211, 102, 0.28);
+  background: transparent;
+  color: #8fd9a8;
+}
+
+.btn-whatsapp-alt:hover {
+  border-color: rgba(37, 211, 102, 0.55);
+  background: rgba(37, 211, 102, 0.1);
+}
+
 .route-nav-bar {
   display: flex;
   flex-wrap: wrap;
@@ -2896,6 +2923,65 @@ a {
   letter-spacing: 0.04em;
   color: var(--cyan);
   font-weight: 700;
+}
+
+.access-log-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin: 0.75rem 0 1rem;
+}
+
+.access-log-role {
+  margin-left: 0.45rem;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  padding: 0.12rem 0.4rem;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+}
+
+.access-log-role.moto {
+  color: #9dffc0;
+  border-color: rgba(61, 255, 176, 0.35);
+  background: rgba(61, 255, 176, 0.08);
+}
+
+.access-log-role.empresa {
+  color: #9ec1ff;
+  border-color: rgba(66, 133, 244, 0.35);
+  background: rgba(66, 133, 244, 0.1);
+}
+
+.stop-outcome-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.55rem;
+}
+
+.stop-outcome-row .btn {
+  font-size: 0.78rem;
+  padding: 0.4rem 0.65rem;
+}
+
+.kind-badge.outcome-ok {
+  background: rgba(61, 255, 176, 0.16);
+  color: #9dffc0;
+}
+
+.kind-badge.outcome-destinatario_ausente,
+.kind-badge.outcome-consultorio_fechado {
+  background: rgba(255, 107, 122, 0.14);
+  color: #ff9aa5;
+}
+
+.btn-maps,
+.btn-waze,
+.route-nav-main {
+  gap: 0.4rem;
 }
 
 .finance-summary-open {

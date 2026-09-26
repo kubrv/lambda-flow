@@ -65,6 +65,7 @@ type AddressRow = {
   label: string | null;
   address: string;
   complement?: string | null;
+  whatsapp?: string | null;
   hours?: unknown;
   lat: number | null;
   lng: number | null;
@@ -107,6 +108,7 @@ function mapStops(stops: Stop[] | null | undefined): Stop[] {
       notesEntrega: notes.entrega || undefined,
       notesRetirada: notes.retirada || undefined,
       boxes: normalizeBoxes(s.boxes),
+      whatsapp: s.whatsapp?.trim() || undefined,
       complement: s.complement?.trim() || undefined,
       hours: s.hours?.length
         ? normalizeHoursPeriods(s.hours)
@@ -190,6 +192,9 @@ export function syncCatalogFromRoutes(data: AppData): AppData {
       if (stop.complement?.trim() && !existing.complement?.trim()) {
         existing.complement = stop.complement.trim();
       }
+      if (stop.whatsapp?.trim() && !existing.whatsapp?.trim()) {
+        existing.whatsapp = stop.whatsapp.trim();
+      }
       if (stop.hours?.length && !existing.hours?.length) {
         existing.hours = normalizeHoursPeriods(stop.hours);
       }
@@ -201,6 +206,7 @@ export function syncCatalogFromRoutes(data: AppData): AppData {
       label: cleanNickname(stop.label, stop.address),
       address: stop.address,
       complement: stop.complement?.trim() || "",
+      whatsapp: stop.whatsapp?.trim() || "",
       hours: stop.hours?.length
         ? normalizeHoursPeriods(stop.hours)
         : cloneDefaultHours(),
@@ -223,6 +229,7 @@ export function upsertSavedAddress(
     label?: string;
     address: string;
     complement?: string;
+    whatsapp?: string;
     hours?: SavedAddress["hours"];
     lat?: number | null;
     lng?: number | null;
@@ -245,6 +252,10 @@ export function upsertSavedAddress(
       input.complement !== undefined
         ? input.complement.trim()
         : prev?.complement || "",
+    whatsapp:
+      input.whatsapp !== undefined
+        ? input.whatsapp.trim()
+        : prev?.whatsapp || "",
     hours:
       input.hours !== undefined
         ? normalizeHoursPeriods(input.hours)
@@ -371,6 +382,7 @@ export async function loadData(): Promise<AppData> {
       label: row.label || row.address.split(",")[0].trim(),
       address: row.address,
       complement: row.complement?.trim() || "",
+      whatsapp: row.whatsapp?.trim() || "",
       hours: normalizeHoursPeriods(row.hours),
       lat: row.lat,
       lng: row.lng,
@@ -398,6 +410,7 @@ export async function loadData(): Promise<AppData> {
       label: row.label || row.address.split(",")[0].trim(),
       address: row.address,
       complement: "",
+      whatsapp: "",
       hours: cloneDefaultHours(),
       lat: row.lat,
       lng: row.lng,
@@ -498,15 +511,31 @@ async function upsertAddressesOnly(addresses: SavedAddress[]): Promise<void> {
     label: a.label,
     address: a.address,
     complement: a.complement?.trim() || "",
+    whatsapp: a.whatsapp?.trim() || "",
     hours: normalizeHoursPeriods(a.hours),
     lat: a.lat,
     lng: a.lng,
     active: a.active !== false,
   }));
   let up = await sb.from("addresses").upsert(rows);
+  if (up.error && /whatsapp|active|complement|hours|column/i.test(up.error.message)) {
+    if (/whatsapp/i.test(up.error.message)) {
+      console.warn(
+        "Rode supabase/migration_address_whatsapp.sql para salvar WhatsApp do destino.",
+      );
+    }
+    up = await sb.from("addresses").upsert(
+      rows.map(({ whatsapp: _w, active: _a, complement, hours, ...rest }) => ({
+        ...rest,
+        complement,
+        hours,
+        active: _a,
+      })),
+    );
+  }
   if (up.error && /active|complement|hours|column/i.test(up.error.message)) {
     up = await sb.from("addresses").upsert(
-      rows.map(({ active: _a, complement, hours, ...rest }) => ({
+      rows.map(({ active: _a, whatsapp: _w, complement, hours, ...rest }) => ({
         ...rest,
         complement,
         hours,

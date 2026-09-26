@@ -11,6 +11,8 @@ type Props = {
   assignedMotoboyName?: string;
   /** Só permite concluir se a rota tiver conteúdo. */
   canComplete: boolean;
+  /** Motoboy logado é o responsável pela rota (obrigatório para concluir). */
+  isAssignedMotoboy?: boolean;
   onUpdate: (next: DayRoute) => void;
 };
 
@@ -24,6 +26,7 @@ export function RouteCompletionPanel({
   actorName,
   assignedMotoboyName = "",
   canComplete,
+  isAssignedMotoboy = true,
   onUpdate,
 }: Props) {
   const status = statusOf(route);
@@ -32,6 +35,7 @@ export function RouteCompletionPanel({
   const [msg, setMsg] = useState("");
 
   const isAdmin = role === "company";
+  const boyCanComplete = role === "motoboy" && isAssignedMotoboy;
   const completedByName =
     route.motoboyCompletedBy ||
     assignedMotoboyName ||
@@ -39,6 +43,12 @@ export function RouteCompletionPanel({
     "";
 
   function markCompletedByBoy() {
+    if (role === "motoboy" && !isAssignedMotoboy) {
+      setMsg(
+        "Rota indisponível: só o motoboy responsável pode marcar como concluída.",
+      );
+      return;
+    }
     if (!canComplete) {
       setMsg("Monte a rota antes de marcar como concluída.");
       return;
@@ -163,7 +173,7 @@ export function RouteCompletionPanel({
         </div>
       ) : null}
 
-      {status === "open" && (role === "motoboy" || isAdmin) ? (
+      {status === "open" && (boyCanComplete || isAdmin) ? (
         <div className="form-grid" style={{ marginTop: "0.5rem" }}>
           <div className="field">
             <label htmlFor="boy-report">
@@ -177,7 +187,7 @@ export function RouteCompletionPanel({
               placeholder="Como foi a rota, imprevistos, cliente ausente…"
             />
           </div>
-          {role === "motoboy" ? (
+          {boyCanComplete ? (
             <button
               type="button"
               className="btn primary"
@@ -186,7 +196,7 @@ export function RouteCompletionPanel({
             >
               Marcar rota como concluída
             </button>
-          ) : (
+          ) : isAdmin ? (
             <div className="row-actions">
               <button
                 type="button"
@@ -210,7 +220,13 @@ export function RouteCompletionPanel({
                 Concluir e verificar
               </button>
             </div>
-          )}
+          ) : null}
+        </div>
+      ) : null}
+
+      {status === "open" && role === "motoboy" && !isAssignedMotoboy ? (
+        <div className="status err" style={{ marginTop: "0.65rem" }}>
+          Só o motoboy responsável pode marcar esta rota como concluída.
         </div>
       ) : null}
 

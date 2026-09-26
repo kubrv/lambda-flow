@@ -65,7 +65,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const preference = {
     items: [
       {
-        title: "Lambda-Flow — plano mensal",
+        title: "Rotaz — plano mensal",
         quantity: 1,
         currency_id: "BRL",
         unit_price: amount,

@@ -7,8 +7,7 @@ type Props = {
 };
 
 /**
- * Logo Lambda-Flow: badge do pacote lambda-strike + wordmark em HTML (Orbitron).
- * Evita SVG com <text> via <img>, que some quando a fonte não embute.
+ * Logo Rotaz: badge ciano + wordmark Orbitron.
  */
 export function BrandLogo({
   className = "",
@@ -18,7 +17,7 @@ export function BrandLogo({
 }: Props) {
   const mark = Math.round(height * 1.05);
   return (
-    <div className={`brand-row ${className}`.trim()} aria-label="Lambda-Flow">
+    <div className={`brand-row ${className}`.trim()} aria-label="Rotaz">
       <img
         className="brand-mark"
         src="/badge.svg"
@@ -29,7 +28,7 @@ export function BrandLogo({
       />
       {showWordmark ? (
         <span className="brand-wordmark-text">
-          <strong>Lambda-Flow</strong>
+          <strong>Rotaz</strong>
           {tagline ? <small>{tagline}</small> : null}
         </span>
       ) : null}

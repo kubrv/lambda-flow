@@ -240,7 +240,7 @@ export function LandingPage({ onLogin, onCreateCompany }: Props) {
             width={72}
             height={72}
           />
-          <p className="landing-kicker">Lambda-Flow</p>
+          <p className="landing-kicker">Rotaz</p>
           <h1>Rotas claras. Entregas no ritmo certo.</h1>
           <p className="landing-lead">
             Do calendário ao Waze: monte o dia, otimize o caminho e libere o

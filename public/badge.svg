@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Lambda-Strike  badge as in the panel (cyan gradient + dark ») -->
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="Lambda-Strike badge">
-  <title>Lambda-Strike Badge</title>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="Rotaz">
+  <title>Rotaz</title>
   <defs>
     <linearGradient id="badgeGrad" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0%" stop-color="#38E8FF"/>
@@ -16,8 +15,10 @@
     </filter>
   </defs>
   <rect x="8" y="8" width="112" height="112" rx="28" fill="url(#badgeGrad)" filter="url(#glow)"/>
-  <g transform="translate(32 32) scale(1)" fill="#031018">
-    <path d="M18 54 L32 10 L38 10 L24 54 Z"/>
-    <path d="M28 34 L50 54 L42 54 L26 38 Z"/>
+  <!-- R estilizado + trilha de rota -->
+  <g fill="#031018">
+    <path d="M38 34h34c14 0 24 8 24 20 0 9-5 16-14 19l16 21h-16l-15-20H50v20H38V34zm12 12v16h20c7 0 12-3.5 12-8s-5-8-12-8H50z"/>
+    <circle cx="92" cy="88" r="6"/>
+    <path d="M78 88h8" stroke="#031018" stroke-width="4" stroke-linecap="round"/>
   </g>
 </svg>

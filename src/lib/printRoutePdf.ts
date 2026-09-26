@@ -163,7 +163,7 @@ export function printDayRoutePdf(input: {
   <header class="brand-head">
     <div class="brand-mark">${LOGO_SVG}</div>
     <div class="brand-text">
-      <div class="brand-name">Lambda-Flow</div>
+      <div class="brand-name">Rotaz</div>
       <h1>Relatório do dia — ${esc(dayLabel)}</h1>
       <p class="sub">Gerado em ${esc(generatedAt)}</p>
     </div>

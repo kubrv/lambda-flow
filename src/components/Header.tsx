@@ -24,7 +24,7 @@ export function Header({
 }: Props) {
   return (
     <header className="site-header">
-      <div className="logo-hit" aria-label="Lambda-Flow">
+      <div className="logo-hit" aria-label="Rotaz">
         <BrandLogo height={40} tagline={subtitle || undefined} />
       </div>
 

@@ -265,6 +265,7 @@ export function RouteEditor({
                 ...notesFor(a.id),
                 boxes: normalizeBoxes(stopBoxes[a.id]),
                 complement: a.complement?.trim() || undefined,
+                whatsapp: a.whatsapp?.trim() || undefined,
                 hours: a.hours,
                 lat: a.lat,
                 lng: a.lng,
@@ -374,6 +375,7 @@ export function RouteEditor({
       notesRetirada: n.notesRetirada,
       boxes: normalizeBoxes(stopBoxes[addressId]),
       complement: addr.complement?.trim() || undefined,
+      whatsapp: addr.whatsapp?.trim() || undefined,
       hours: addr.hours,
       lat: addr.lat,
       lng: addr.lng,
@@ -546,6 +548,7 @@ export function RouteEditor({
             ...notesFor(a.id),
             boxes: normalizeBoxes(stopBoxes[a.id]),
             complement: a.complement?.trim() || undefined,
+            whatsapp: a.whatsapp?.trim() || undefined,
             hours: a.hours,
             lat: a.lat,
             lng: a.lng,
@@ -610,6 +613,11 @@ export function RouteEditor({
             matched?.complement?.trim() ||
             savedAddr.complement?.trim() ||
             s.complement ||
+            undefined,
+          whatsapp:
+            matched?.whatsapp?.trim() ||
+            savedAddr.whatsapp?.trim() ||
+            s.whatsapp ||
             undefined,
           hours: matched?.hours || savedAddr.hours || s.hours,
           lat: s.lat,

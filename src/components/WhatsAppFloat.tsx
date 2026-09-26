@@ -1,6 +1,6 @@
 const WA_URL =
   "https://wa.me/5511947200616?text=" +
-  encodeURIComponent("Olá! Quero saber mais sobre o Lambda-Flow.");
+  encodeURIComponent("Olá! Quero saber mais sobre o Rotaz.");
 
 export function WhatsAppFloat() {
   return (

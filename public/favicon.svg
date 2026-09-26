@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Lambda-Strike  favicon / 32px-friendly -->
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32" role="img" aria-label="Lambda-Strike favicon">
-  <title>Lambda-Strike Favicon</title>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32" role="img" aria-label="Rotaz">
+  <title>Rotaz</title>
   <defs>
     <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0%" stop-color="#38E8FF"/>
@@ -9,8 +8,5 @@
     </linearGradient>
   </defs>
   <rect width="32" height="32" rx="8" fill="url(#g)"/>
-  <g transform="translate(4 4) scale(0.375)" fill="#031018">
-    <path d="M18 54 L32 10 L38 10 L24 54 Z"/>
-    <path d="M28 34 L50 54 L42 54 L26 38 Z"/>
-  </g>
+  <path fill="#031018" d="M8 7h9c4 0 6.5 2.2 6.5 5.2S21 17.4 17 17.4h-5.5V25H8V7zm3.5 3.2v4h5c1.8 0 3-.9 3-2s-1.2-2-3-2h-5z"/>
 </svg>
