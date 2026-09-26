@@ -1,5 +1,4 @@
 import { MonthCalendar } from "./MonthCalendar";
-import { AccessHistoryPanel } from "./admin/AccessHistoryPanel";
 import { AddressesAdmin } from "./admin/AddressesAdmin";
 import { FinanceAdmin } from "./admin/FinanceAdmin";
 import { MotoboysAdmin } from "./admin/MotoboysAdmin";
@@ -15,8 +14,7 @@ export type AdminTab =
   | "motoboys"
   | "valores"
   | "financeiro"
-  | "plano"
-  | "acessos";
+  | "plano";
 
 type Props = {
   data: AppData;
@@ -40,7 +38,6 @@ const TABS: { id: AdminTab; label: string }[] = [
   { id: "valores", label: "Partida" },
   { id: "financeiro", label: "Financeiro" },
   { id: "plano", label: "Meu plano" },
-  { id: "acessos", label: "Histórico de acessos" },
 ];
 
 export function AdminShell({
@@ -126,9 +123,6 @@ export function AdminShell({
       ) : null}
       {tab === "plano" && company ? (
         <BillingScreen company={company} onRefresh={onRefreshCompany} />
-      ) : null}
-      {tab === "acessos" && company ? (
-        <AccessHistoryPanel companyId={company.id} />
       ) : null}
     </div>
   );

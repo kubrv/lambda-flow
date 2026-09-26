@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AdminShell, type AdminTab } from "./components/AdminShell";
+import { MasterAdminPanel } from "./components/admin/MasterAdminPanel";
 import { AuthScreen } from "./components/auth/AuthScreen";
 import { CompanySignupScreen } from "./components/auth/CompanySignupScreen";
 import { BillingScreen } from "./components/billing/BillingScreen";
@@ -11,6 +12,7 @@ import { RouteView } from "./components/RouteView";
 import { WhatsAppFloat } from "./components/WhatsAppFloat";
 import { SiteFooter } from "./components/SiteFooter";
 import {
+  LAMBDA_COMPANY_ID,
   type Company,
   type Profile,
   companyHasActivePlan,
@@ -25,6 +27,17 @@ import { loadData, saveData } from "./lib/storage";
 import type { AppData } from "./lib/types";
 import { getRoute } from "./lib/types";
 import { logCompanyAccess } from "./components/admin/AccessHistoryPanel";
+import { BrandLogo } from "./components/BrandLogo";
+
+type Gate = "landing" | "auth" | "signup" | "maintenance";
+
+function BrandLogoGate() {
+  return (
+    <div style={{ marginBottom: "1rem" }}>
+      <BrandLogo height={48} />
+    </div>
+  );
+}
 
 export default function App() {
   const today = localDateKey();
@@ -36,13 +49,47 @@ export default function App() {
   const [date, setDate] = useState(today);
   const [year, setYear] = useState(todayDate.getFullYear());
   const [monthIndex, setMonthIndex] = useState(todayDate.getMonth());
-  const [view, setView] = useState<"public" | "admin" | "profile">("public");
+  const [view, setView] = useState<"public" | "admin" | "profile" | "master">(
+    "public",
+  );
   const [adminTab, setAdminTab] = useState<AdminTab>("rotas");
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [gate, setGate] = useState<"landing" | "auth" | "signup">("landing");
+  const [gate, setGate] = useState<Gate>("landing");
+  const [maintInfo, setMaintInfo] = useState<{
+    message: string;
+    whatsapp: string;
+  } | null>(null);
   const skipFirstSave = useRef(true);
   const accessLogged = useRef<string | null>(null);
+
+  const isLambdaMaster =
+    Boolean(company) && company?.id === LAMBDA_COMPANY_ID;
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const res = await fetch("/api/master?action=public-settings");
+        const json = (await res.json()) as {
+          ok?: boolean;
+          maintenance?: boolean;
+          message?: string;
+          whatsapp?: string;
+        };
+        if (json.ok && json.maintenance) {
+          setMaintInfo({
+            message:
+              json.message ||
+              "Rotaz em manutenção rápida. Já voltamos em breve.",
+            whatsapp: json.whatsapp || "5511947200616",
+          });
+          setGate("maintenance");
+        }
+      } catch {
+        // ignore — site segue normal
+      }
+    })();
+  }, []);
 
   const refreshAuth = useCallback(async () => {
     if (!isSupabaseConfigured()) {
@@ -203,6 +250,33 @@ export default function App() {
   }
 
   if (!profile) {
+    if (gate === "maintenance" && maintInfo) {
+      const wa = maintInfo.whatsapp.replace(/\D/g, "");
+      return (
+        <div className="app-shell maintenance-screen">
+          <BrandLogoGate />
+          <h1>Rotaz em manutenção</h1>
+          <p className="lede">{maintInfo.message}</p>
+          <a
+            className="btn btn-whatsapp"
+            href={`https://wa.me/${wa}?text=${encodeURIComponent("Olá! Vi que o Rotaz está em manutenção.")}`}
+            target="_blank"
+            rel="noreferrer"
+          >
+            Falar no WhatsApp
+          </a>
+          <button
+            type="button"
+            className="btn ghost"
+            style={{ marginTop: "0.75rem" }}
+            onClick={() => setGate("auth")}
+          >
+            Sou da equipe — entrar
+          </button>
+          <SiteFooter compact hideLogo />
+        </div>
+      );
+    }
     if (gate === "landing") {
       return (
         <div className="landing-shell">
@@ -267,19 +341,24 @@ export default function App() {
   return (
     <div className="app-shell">
       <Header
+        companyName={company?.name || null}
         subtitle={
           isCompany
-            ? view === "admin"
-              ? `${company?.name || "Empresa"} · painel administrador`
-              : `${company?.name || "Empresa"} · visão motoboy`
+            ? view === "master"
+              ? "Painel Master"
+              : view === "admin"
+                ? "painel administrador"
+                : "visão motoboy"
             : `${profile.fullName || "Motoboy"} · rotas`
         }
         showAdminLink={isCompany}
         showProfileLink={!isCompany}
+        showMasterLink={isLambdaMaster}
         view={view}
         onOpenAdmin={() => setView("admin")}
         onOpenPublic={() => setView("public")}
         onOpenProfile={() => setView("profile")}
+        onOpenMaster={() => setView("master")}
         onSignOut={() => void handleSignOut()}
       />
 
@@ -289,7 +368,9 @@ export default function App() {
         </div>
       ) : null}
 
-      {isCompany && view === "admin" ? (
+      {isCompany && view === "master" && company ? (
+        <MasterAdminPanel companyId={company.id} />
+      ) : isCompany && view === "admin" ? (
         <AdminShell
           data={data}
           date={date}

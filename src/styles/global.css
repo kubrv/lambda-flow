@@ -124,6 +124,18 @@ a {
   white-space: nowrap;
 }
 
+.brand-company-name {
+  font-family: Manrope, system-ui, sans-serif;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--cyan);
+  letter-spacing: 0.02em;
+  max-width: min(42vw, 220px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .brand-wordmark-text small {
   font-family: Manrope, system-ui, sans-serif;
   font-size: 0.68rem;
@@ -2543,11 +2555,13 @@ a {
 }
 
 .site-footer-meta {
-  margin: 0;
+  margin: 0 auto;
   display: flex;
   flex-wrap: wrap;
   gap: 0.25rem 0.45rem;
   align-items: center;
+  justify-content: center;
+  text-align: center;
   font-size: 0.78rem;
   color: var(--muted);
 }
@@ -2991,4 +3005,62 @@ a {
 .finance-summary-paid {
   border-color: rgba(46, 204, 113, 0.5);
   background: rgba(46, 204, 113, 0.12);
+}
+
+.finance-month-nav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem;
+  margin-bottom: 0.85rem;
+}
+
+.finance-month-nav strong {
+  min-width: 9rem;
+  text-align: center;
+}
+
+.collapsible-toggle {
+  width: 100%;
+  justify-content: flex-start;
+  opacity: 0.9;
+}
+
+.settle-inline {
+  margin-top: 0.65rem;
+  padding: 0.65rem;
+  border: 1px solid rgba(61, 255, 176, 0.28);
+  border-radius: 12px;
+  background: rgba(61, 255, 176, 0.06);
+}
+
+.report-text-area {
+  width: 100%;
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  resize: vertical;
+  background: rgba(3, 16, 24, 0.7);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 0.75rem;
+}
+
+.master-banner {
+  border-color: rgba(56, 232, 255, 0.45);
+  background: rgba(56, 232, 255, 0.08);
+}
+
+.maintenance-screen {
+  max-width: 28rem;
+  margin: 3rem auto;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.maintenance-screen h1 {
+  margin: 0.5rem 0;
 }

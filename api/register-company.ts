@@ -42,7 +42,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const phone = String(body.phone || "").trim();
   const password = String(body.password || "");
   const method = String(body.method || "pix") as "pix" | "card" | "boleto";
-  const amount = 40;
+  const couponCode = String(body.coupon || body.couponCode || "")
+    .trim()
+    .toUpperCase();
+  let amount = 40;
+  let appliedCoupon: { code: string; percent: number; id: string } | null =
+    null;
 
   if (!companyName || !ownerName || !email || !phone || password.length < 6) {
     return res.status(400).json({
@@ -52,37 +57,78 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
+    if (couponCode) {
+      const { data: coupon } = await sb
+        .from("plan_coupons")
+        .select("*")
+        .ilike("code", couponCode)
+        .maybeSingle();
+      if (!coupon || !coupon.active) {
+        return res.status(400).json({ ok: false, error: "Cupom inválido." });
+      }
+      if (coupon.uses >= coupon.max_uses) {
+        return res.status(400).json({ ok: false, error: "Cupom esgotado." });
+      }
+      const pct = Number(coupon.percent_off) || 0;
+      amount = Math.round(amount * (1 - pct / 100) * 100) / 100;
+      appliedCoupon = { code: coupon.code, percent: pct, id: coupon.id };
+    }
+
     const baseSlug = slugify(companyName) || "empresa";
     const slug = `${baseSlug}-${Math.random().toString(36).slice(2, 7)}`;
+
+    const planStatus =
+      appliedCoupon && amount <= 0 ? "active" : "pending";
+    const planPaidUntil =
+      planStatus === "active"
+        ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+        : null;
 
     const { data: company, error: companyErr } = await sb
       .from("companies")
       .insert({
         name: companyName,
         slug,
-        plan_price: amount,
-        plan_status: "pending",
+        plan_price: 40,
+        plan_status: planStatus,
+        plan_paid_until: planPaidUntil,
+        plan_method: method,
         phone,
       })
       .select("id")
       .single();
 
-    // phone column may not exist yet — retry without it
+    // phone / plan_method columns may not exist yet — retry stripped
     let companyId = company?.id as string | undefined;
     if (companyErr) {
-      if (/phone|column/i.test(companyErr.message)) {
+      if (/phone|plan_method|plan_paid|column/i.test(companyErr.message)) {
         const retry = await sb
           .from("companies")
           .insert({
             name: companyName,
             slug,
-            plan_price: amount,
-            plan_status: "pending",
+            plan_price: 40,
+            plan_status: planStatus,
+            plan_paid_until: planPaidUntil,
           })
           .select("id")
           .single();
-        if (retry.error) throw retry.error;
-        companyId = retry.data.id;
+        if (retry.error) {
+          const retry2 = await sb
+            .from("companies")
+            .insert({
+              name: companyName,
+              slug,
+              plan_price: 40,
+              plan_status: planStatus === "active" ? "pending" : planStatus,
+            })
+            .select("id")
+            .single();
+          if (retry2.error) throw retry2.error;
+          companyId = retry2.data.id;
+        } else {
+          companyId = retry.data.id;
+        }
       } else {
         throw companyErr;
       }
@@ -135,6 +181,42 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         active: true,
       },
     ]);
+
+    async function bumpCouponUse(couponId: string) {
+      const { data: cur } = await sb
+        .from("plan_coupons")
+        .select("uses")
+        .eq("id", couponId)
+        .maybeSingle();
+      await sb
+        .from("plan_coupons")
+        .update({ uses: Number(cur?.uses || 0) + 1 })
+        .eq("id", couponId);
+    }
+
+    if (appliedCoupon && amount <= 0) {
+      await sb.from("payments").insert({
+        company_id: companyId,
+        amount: 0,
+        method,
+        status: "paid",
+        provider: "coupon",
+        paid_at: new Date().toISOString(),
+        raw: { coupon: appliedCoupon.code },
+      });
+      await bumpCouponUse(appliedCoupon.id);
+      return res.status(200).json({
+        ok: true,
+        companyId,
+        couponApplied: appliedCoupon.code,
+        free: true,
+        message: `Cupom ${appliedCoupon.code} aplicado — plano ativo por 30 dias.`,
+      });
+    }
+
+    if (appliedCoupon) {
+      await bumpCouponUse(appliedCoupon.id);
+    }
 
     const token = process.env.MERCADOPAGO_ACCESS_TOKEN;
     const appUrl =

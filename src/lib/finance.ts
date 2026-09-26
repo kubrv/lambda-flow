@@ -180,3 +180,77 @@ export function buildMonthlyReport(
     label: monthLabel(year, monthIndex),
   };
 }
+
+export function buildPeriodReportText(
+  report: PeriodReport,
+  motoboys: { id: string; name: string }[],
+): string {
+  const lines: string[] = [];
+  lines.push(`Relatório Rotaz — ${report.label}`);
+  lines.push("");
+  lines.push(`Km no período: ${formatKm(report.totalKm)}`);
+  lines.push(`Rotas: ${report.routeCount}`);
+  lines.push(`Em aberto: ${formatMoneyBRL(report.pending)}`);
+  lines.push(`Acertado: ${formatMoneyBRL(report.settled)}`);
+  lines.push(`Total gerado: ${formatMoneyBRL(report.earned)}`);
+  lines.push("");
+  lines.push("— Rotas —");
+  if (!report.routes.length) {
+    lines.push("(nenhuma)");
+  } else {
+    for (const r of report.routes) {
+      const boy =
+        motoboys.find((m) => m.id === r.motoboyId)?.name || "Sem motoboy";
+      const status = r.completionStatus || "open";
+      lines.push(
+        `• ${formatDateShort(r.date)} · ${boy} · ${formatKm(r.totalKm || 0)} · ${r.stops.length} parada(s) · ${status}`,
+      );
+    }
+  }
+  lines.push("");
+  lines.push("— Lançamentos —");
+  if (!report.entries.length) {
+    lines.push("(nenhum)");
+  } else {
+    for (const e of report.entries) {
+      const boy =
+        motoboys.find((m) => m.id === e.motoboyId)?.name || "Motoboy";
+      const st = e.status === "paid" ? "acertado" : "em aberto";
+      const dates = e.routeDates.map(formatDateShort).join(", ") || "—";
+      lines.push(
+        `• ${boy} · ${formatMoneyBRL(e.amount)} · ${st} · ${dates}${
+          e.description ? ` · ${e.description}` : ""
+        }`,
+      );
+    }
+  }
+  lines.push("");
+  lines.push("— Rotaz");
+  return lines.join("\n");
+}
+
+export function buildFinanceOverviewText(
+  finance: FinanceEntry[],
+  motoboys: { id: string; name: string }[],
+  routeCount: number,
+): string {
+  const g = globalFinanceSummary(finance);
+  const lines: string[] = [];
+  lines.push("Financeiro Rotaz — visão geral");
+  lines.push("");
+  lines.push(`Total de rotas (lançamentos com data): ${routeCount}`);
+  lines.push(`Em aberto: ${formatMoneyBRL(g.pending)}`);
+  lines.push(`Acertado: ${formatMoneyBRL(g.settled)}`);
+  lines.push(`Total gerado: ${formatMoneyBRL(g.earned)}`);
+  lines.push("");
+  for (const m of motoboys) {
+    const t = motoboyFinanceSummary(finance, m.id);
+    if (t.earned <= 0) continue;
+    lines.push(
+      `• ${m.name}: aberto ${formatMoneyBRL(t.pending)} · acertado ${formatMoneyBRL(t.settled)} · total ${formatMoneyBRL(t.earned)}`,
+    );
+  }
+  lines.push("");
+  lines.push("— Rotaz");
+  return lines.join("\n");
+}

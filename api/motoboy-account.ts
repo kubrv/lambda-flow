@@ -389,16 +389,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const emailRaw = String(body.email || "").trim().toLowerCase();
     const email = emailRaw || (username ? syntheticEmail(username) : "");
 
-    if (!motoboyId || !name || !username || !phone) {
+    if (!motoboyId || !name || !phone) {
       return res.status(400).json({
         ok: false,
-        error: "Informe motoboyId, nome, usuário e celular.",
+        error: "Informe motoboyId, nome e celular.",
       });
     }
     if (!email) {
       return res.status(400).json({
         ok: false,
-        error: "Informe um usuário válido.",
+        error: "Informe o e-mail do motoboy (usuário é opcional).",
       });
     }
 

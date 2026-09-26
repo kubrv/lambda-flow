@@ -398,13 +398,7 @@ export function LandingPage({ onLogin, onCreateCompany }: Props) {
       </section>
 
       <footer className="landing-footer">
-        <div className="landing-footer-top">
-          <BrandLogo height={36} tagline="Rotas · Maps · Waze" />
-          <button type="button" className="btn" onClick={onLogin}>
-            Entrar
-          </button>
-        </div>
-        <SiteFooter asDiv />
+        <SiteFooter />
       </footer>
 
       <WhatsAppFloat />

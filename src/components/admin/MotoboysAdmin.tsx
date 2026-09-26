@@ -142,8 +142,12 @@ export function MotoboysAdmin({ data, onChange }: Props) {
     const email = (editingId === m.id ? edit.email : m.email || "")
       .trim()
       .toLowerCase();
-    if (!username || !phone || !name) {
-      setErr("Salve nome, usuário e celular antes de gerar o 1º acesso.");
+    if (!phone || !name) {
+      setErr("Salve nome e celular. Informe o e-mail (obrigatório) para o acesso.");
+      return;
+    }
+    if (!email) {
+      setErr("E-mail é obrigatório para o acesso do motoboy. Usuário é opcional.");
       return;
     }
     const patched = data.motoboys.map((row) =>
@@ -151,9 +155,9 @@ export function MotoboysAdmin({ data, onChange }: Props) {
         ? {
             ...row,
             name,
-            username,
+            username: username || undefined,
             phone,
-            email: email || undefined,
+            email,
           }
         : row,
     );
@@ -166,9 +170,9 @@ export function MotoboysAdmin({ data, onChange }: Props) {
       const result = await provisionMotoboyAccount({
         motoboyId: m.id,
         name,
-        username,
+        username: username || undefined,
         phone,
-        email: email || undefined,
+        email,
       });
       const code = String(result.accessCode || "");
       setAccessCodes((prev) => ({ ...prev, [m.id]: code }));
@@ -179,7 +183,7 @@ export function MotoboysAdmin({ data, onChange }: Props) {
             ? {
                 ...row,
                 passwordSet: false,
-                username,
+                username: username || undefined,
                 phone,
                 email: email || String(result.email || "") || undefined,
               }
@@ -187,7 +191,7 @@ export function MotoboysAdmin({ data, onChange }: Props) {
         ),
       });
       setMsg(
-        `Senha provisória (4 dígitos) para ${name}: ${code}. No 1º acesso ele troca pela senha definitiva.`,
+        `Senha provisória (4 dígitos) para ${name}: ${code}. No 1º acesso ele troca pela senha definitiva. Login: ${email}${username ? ` ou @${username}` : ""}.`,
       );
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Falha ao gerar acesso.");
@@ -315,19 +319,19 @@ export function MotoboysAdmin({ data, onChange }: Props) {
           />
         </div>
         <div className="field">
-          <label htmlFor={`${idPrefix}-email`}>E-mail (opcional)</label>
+          <label htmlFor={`${idPrefix}-email`}>E-mail (obrigatório p/ acesso)</label>
           <input
             id={`${idPrefix}-email`}
             type="email"
             value={value.email}
             onChange={(e) => setValue({ ...value, email: e.target.value })}
-            placeholder="opcional"
+            placeholder="ex: joao@empresa.com"
             autoComplete="off"
             name={`${idPrefix}-email`}
           />
         </div>
         <div className="field">
-          <label htmlFor={`${idPrefix}-user`}>Usuário (obrigatório p/ acesso)</label>
+          <label htmlFor={`${idPrefix}-user`}>Usuário (opcional — facilita o login)</label>
           <input
             id={`${idPrefix}-user`}
             value={value.username}

@@ -75,11 +75,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (paid) {
     const until = new Date();
     until.setMonth(until.getMonth() + 1);
+    const method =
+      (payment as { metadata?: { method?: string }; payment_type_id?: string })
+        .metadata?.method ||
+      (payment as { payment_type_id?: string }).payment_type_id ||
+      null;
     await sb
       .from("companies")
       .update({
         plan_status: "active",
         plan_paid_until: until.toISOString(),
+        ...(method ? { plan_method: method } : {}),
       })
       .eq("id", companyId);
   }

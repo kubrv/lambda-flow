@@ -110,9 +110,9 @@ export async function completeMotoboyFirstAccess(input: {
 export async function provisionMotoboyAccount(input: {
   motoboyId: string;
   name: string;
-  username: string;
+  username?: string;
   phone: string;
-  email?: string;
+  email: string;
 }) {
   return callMotoboyAccount({
     action: "provision",

@@ -30,10 +30,15 @@ export function weekdayFromDateKey(key: string): Weekday {
 export function formatDateLabel(key: string): string {
   const d = parseDateKey(key);
   const wd = WEEKDAYS.find((w) => w.id === weekdayFromDateKey(key))?.label ?? "";
-  return `${wd}, ${d.toLocaleDateString("pt-BR")}`;
+  return `${d.toLocaleDateString("pt-BR")} (${wd})`;
 }
 
+/** Data curta com dia da semana: 26/09/2026 (Terça-feira) */
 export function formatDateShort(key: string): string {
+  return formatDateLabel(key);
+}
+
+export function formatDateOnly(key: string): string {
   return parseDateKey(key).toLocaleDateString("pt-BR");
 }
 

@@ -8,11 +8,11 @@ export type Weekday =
   | "dom";
 
 export const WEEKDAYS: { id: Weekday; label: string; short: string }[] = [
-  { id: "seg", label: "Segunda", short: "Seg" },
-  { id: "ter", label: "Terça", short: "Ter" },
-  { id: "qua", label: "Quarta", short: "Qua" },
-  { id: "qui", label: "Quinta", short: "Qui" },
-  { id: "sex", label: "Sexta", short: "Sex" },
+  { id: "seg", label: "Segunda-feira", short: "Seg" },
+  { id: "ter", label: "Terça-feira", short: "Ter" },
+  { id: "qua", label: "Quarta-feira", short: "Qua" },
+  { id: "qui", label: "Quinta-feira", short: "Qui" },
+  { id: "sex", label: "Sexta-feira", short: "Sex" },
   { id: "sab", label: "Sábado", short: "Sáb" },
   { id: "dom", label: "Domingo", short: "Dom" },
 ];

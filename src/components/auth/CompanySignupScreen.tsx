@@ -14,6 +14,7 @@ export function CompanySignupScreen({ onAuthenticated, onBack }: Props) {
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
+  const [coupon, setCoupon] = useState("ROTAZ10");
   const [method, setMethod] = useState<"pix" | "card" | "boleto">("pix");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -40,6 +41,7 @@ export function CompanySignupScreen({ onAuthenticated, onBack }: Props) {
           phone: phone.trim(),
           password,
           method,
+          coupon: coupon.trim() || undefined,
         }),
       });
       const json = (await res.json()) as {
@@ -47,6 +49,7 @@ export function CompanySignupScreen({ onAuthenticated, onBack }: Props) {
         error?: string;
         checkoutUrl?: string;
         manual?: boolean;
+        free?: boolean;
         message?: string;
       };
       if (!res.ok || !json.ok) {
@@ -54,6 +57,12 @@ export function CompanySignupScreen({ onAuthenticated, onBack }: Props) {
       }
 
       await signIn(email.trim(), password);
+
+      if (json.free) {
+        setHint(json.message || "Cupom aplicado — plano ativo.");
+        onAuthenticated();
+        return;
+      }
 
       if (json.checkoutUrl) {
         window.location.href = json.checkoutUrl;
@@ -133,6 +142,19 @@ export function CompanySignupScreen({ onAuthenticated, onBack }: Props) {
               placeholder="Mínimo 6 caracteres"
               autoComplete="new-password"
             />
+          </div>
+          <div className="field">
+            <label>Cupom (opcional)</label>
+            <input
+              value={coupon}
+              onChange={(e) => setCoupon(e.target.value.toUpperCase())}
+              placeholder="ROTAZ10"
+              autoComplete="off"
+            />
+            <p className="hint">
+              10 primeiros cadastros: use <strong>ROTAZ10</strong> para 1º mês
+              grátis.
+            </p>
           </div>
           <div className="field">
             <label>Forma de pagamento</label>

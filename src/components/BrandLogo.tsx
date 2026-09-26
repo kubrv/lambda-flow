@@ -2,8 +2,10 @@ type Props = {
   className?: string;
   height?: number;
   showWordmark?: boolean;
-  /** Subtítulo opcional ao lado do nome (ex.: no rodapé). */
+  /** Subtítulo opcional sob o nome. */
   tagline?: string;
+  /** Nome da empresa logada (ao lado do wordmark). */
+  companyName?: string;
 };
 
 /**
@@ -14,6 +16,7 @@ export function BrandLogo({
   height = 40,
   showWordmark = true,
   tagline,
+  companyName,
 }: Props) {
   const mark = Math.round(height * 1.05);
   return (
@@ -29,6 +32,9 @@ export function BrandLogo({
       {showWordmark ? (
         <span className="brand-wordmark-text">
           <strong>Rotaz</strong>
+          {companyName ? (
+            <span className="brand-company-name">{companyName}</span>
+          ) : null}
           {tagline ? <small>{tagline}</small> : null}
         </span>
       ) : null}
