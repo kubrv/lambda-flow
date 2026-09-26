@@ -46,6 +46,131 @@ export function dayRouteFileName(dateKey: string): string {
   return `Rota-dia-${short}`;
 }
 
+function outcomeText(o?: string | null): string {
+  if (o === "ok") return "Entregue / retirado";
+  if (o === "destinatario_ausente") return "Destinatário ausente";
+  if (o === "consultorio_fechado") return "Consultório fechado";
+  return "";
+}
+
+/** Texto completo da rota do dia — para copiar / WhatsApp. */
+export function buildDayRouteText(input: {
+  date: string;
+  route: DayRoute;
+  motoboys: Motoboy[];
+  pricePerKm: number;
+}): string {
+  const dayLabel = formatDateLabel(input.date);
+  const motoboy = input.motoboys.find((m) => m.id === input.route.motoboyId);
+  const rate =
+    Number.isFinite(input.pricePerKm) && input.pricePerKm > 0
+      ? input.pricePerKm
+      : DEFAULT_PRICE_PER_KM;
+  const fare = input.route.totalKm * rate;
+  const boxesSum = totalBoxes(input.route.stops);
+  const completion = input.route.completionStatus || "open";
+  const lines: string[] = [];
+
+  lines.push(`Rota Rotaz — ${dayLabel}`);
+  lines.push("");
+  lines.push(
+    `Motoboy: ${motoboy?.name || "Não atribuído"}${
+      motoboy?.company ? ` · ${motoboy.company}` : ""
+    }`,
+  );
+  lines.push(`Km: ${formatKm(input.route.totalKm || 0)}`);
+  lines.push(
+    `Valor estimado: ${formatMoneyBRL(fare)} (${formatMoneyBRL(rate)}/km)`,
+  );
+  lines.push(`Paradas: ${input.route.stops.length}`);
+  if (boxesSum > 0) {
+    lines.push(
+      `Total de caixas: ${boxesSum} ${boxesSum === 1 ? "caixa" : "caixas"}`,
+    );
+  }
+  lines.push(
+    `Status: ${
+      completion === "verified"
+        ? "Verificada"
+        : completion === "completed"
+          ? "Concluída"
+          : "Em andamento"
+    }${
+      input.route.motoboyCompletedBy
+        ? ` · ${input.route.motoboyCompletedBy}`
+        : ""
+    }`,
+  );
+  if (input.route.returnToStart) {
+    lines.push("Retorno ao ponto de partida: sim");
+  }
+  lines.push("");
+
+  lines.push("— Partida —");
+  lines.push(input.route.startAddress.trim() || "(sem endereço de partida)");
+  lines.push("");
+
+  lines.push("— Paradas —");
+  if (!input.route.stops.length) {
+    lines.push("(nenhuma)");
+  } else {
+    input.route.stops.forEach((stop, index) => {
+      const kinds = resolveStopKinds(stop);
+      const notes = resolveStopNotes(stop);
+      const boxes = normalizeBoxes(stop.boxes);
+      const kindLabel =
+        kinds.includes("entrega") && kinds.includes("retirada")
+          ? "Entrega e Retirada"
+          : kinds.includes("retirada")
+            ? "Retirada"
+            : "Entrega";
+      const title = motoboyStopTitle(index, stop.label, stop.address);
+      lines.push(`${index + 1}. ${title}`);
+      lines.push(`   Endereço: ${stop.address}`);
+      if (stop.complement?.trim()) {
+        lines.push(`   Complemento: ${stop.complement.trim()}`);
+      }
+      lines.push(
+        `   Horário: ${formatHoursLabel(normalizeHoursPeriods(stop.hours))}`,
+      );
+      lines.push(`   Tipo: ${kindLabel}`);
+      if (boxes > 0) {
+        lines.push(
+          `   Caixas: ${boxes} ${boxes === 1 ? "caixa" : "caixas"}`,
+        );
+      }
+      if (notes.entrega) lines.push(`   Obs. entrega: ${notes.entrega}`);
+      if (notes.retirada) lines.push(`   Obs. retirada: ${notes.retirada}`);
+      if (stop.whatsapp?.trim()) {
+        lines.push(`   WhatsApp: ${stop.whatsapp.trim()}`);
+      }
+      const out = outcomeText(stop.visitOutcome);
+      if (out) lines.push(`   Resultado: ${out}`);
+      lines.push("");
+    });
+  }
+
+  if (input.route.returnToStart && input.route.startAddress.trim()) {
+    lines.push("— Retorno —");
+    lines.push(input.route.startAddress.trim());
+    lines.push("");
+  }
+
+  if (input.route.motoboyReport?.trim()) {
+    lines.push("— Relatório do motoboy —");
+    lines.push(input.route.motoboyReport.trim());
+    lines.push("");
+  }
+  if (input.route.adminReport?.trim()) {
+    lines.push("— Relatório do administrador —");
+    lines.push(input.route.adminReport.trim());
+    lines.push("");
+  }
+
+  lines.push("— Rotaz");
+  return lines.join("\n");
+}
+
 export function printDayRoutePdf(input: {
   date: string;
   route: DayRoute;

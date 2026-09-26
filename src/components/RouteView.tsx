@@ -13,7 +13,7 @@ import {
   pointFromCoords,
   wazeNavigateUrl,
 } from "../lib/mapsLinks";
-import { printDayRoutePdf } from "../lib/printRoutePdf";
+import { printDayRoutePdf, buildDayRouteText } from "../lib/printRoutePdf";
 import type {
   DayRoute,
   Motoboy,
@@ -72,6 +72,8 @@ export function RouteView({
   const [waSendByStop, setWaSendByStop] = useState<
     Record<string, { state: WaSendState; message?: string }>
   >({});
+  const [routeText, setRouteText] = useState("");
+  const [textCopied, setTextCopied] = useState(false);
   const dayLabel = formatDateLabel(date);
   const motoboy = motoboys.find((m) => m.id === route.motoboyId);
   const isAssignedBoy =
@@ -164,6 +166,36 @@ export function RouteView({
       window.alert(
         err instanceof Error ? err.message : "Não foi possível gerar o PDF.",
       );
+    }
+  }
+
+  function handleGenerateRouteText() {
+    const text = buildDayRouteText({
+      date,
+      route,
+      motoboys,
+      pricePerKm: rate,
+    });
+    setRouteText(text);
+    setTextCopied(false);
+    void navigator.clipboard.writeText(text).then(
+      () => setTextCopied(true),
+      () => {
+        /* mostra o texto para copiar manualmente */
+      },
+    );
+  }
+
+  async function handleCopyRouteText() {
+    const text =
+      routeText ||
+      buildDayRouteText({ date, route, motoboys, pricePerKm: rate });
+    if (!routeText) setRouteText(text);
+    try {
+      await navigator.clipboard.writeText(text);
+      setTextCopied(true);
+    } catch {
+      window.alert("Não foi possível copiar. Selecione o texto e copie manualmente.");
     }
   }
 
@@ -593,6 +625,13 @@ export function RouteView({
             <button type="button" className="btn" onClick={handlePrintPdf}>
               PDF com botões Maps/Waze
             </button>
+            <button
+              type="button"
+              className="btn primary"
+              onClick={handleGenerateRouteText}
+            >
+              Copiar em texto
+            </button>
             {route.optimizedAt ? (
               <span className="hint">
                 Última otimização:{" "}
@@ -600,6 +639,36 @@ export function RouteView({
               </span>
             ) : null}
           </div>
+
+          {routeText ? (
+            <div className="period-box report-text-box" style={{ marginTop: "0.85rem" }}>
+              <div className="row-actions" style={{ marginBottom: "0.5rem" }}>
+                <button
+                  type="button"
+                  className="btn primary"
+                  onClick={() => void handleCopyRouteText()}
+                >
+                  {textCopied ? "Copiado!" : "Copiar texto"}
+                </button>
+                <button
+                  type="button"
+                  className="btn ghost"
+                  onClick={() => {
+                    setRouteText("");
+                    setTextCopied(false);
+                  }}
+                >
+                  Fechar
+                </button>
+              </div>
+              <textarea
+                className="report-text-area"
+                rows={14}
+                readOnly
+                value={routeText}
+              />
+            </div>
+          ) : null}
 
           {onRouteChange ? (
             <RouteCompletionPanel
