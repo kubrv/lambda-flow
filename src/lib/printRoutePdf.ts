@@ -78,6 +78,9 @@ export function buildDayRouteText(input: {
       motoboy?.company ? ` · ${motoboy.company}` : ""
     }`,
   );
+  if (motoboy?.pixKey?.trim()) {
+    lines.push(`Chave PIX: ${motoboy.pixKey.trim()}`);
+  }
   lines.push(`Km: ${formatKm(input.route.totalKm || 0)}`);
   lines.push(
     `Valor estimado: ${formatMoneyBRL(fare)} (${formatMoneyBRL(rate)}/km)`,
@@ -326,7 +329,14 @@ export function printDayRoutePdf(input: {
   </div>
 
   <div class="grid">
-    <div><strong>Motoboy</strong>${esc(motoboy?.name ?? "Não atribuído")}</div>
+    <div>
+      <strong>Motoboy</strong>${esc(motoboy?.name ?? "Não atribuído")}
+      ${
+        motoboy?.pixKey?.trim()
+          ? `<div class="pix-key"><strong>Chave PIX</strong>${esc(motoboy.pixKey.trim())}</div>`
+          : ""
+      }
+    </div>
     <div><strong>Paradas</strong>${input.route.stops.length}${
       input.route.returnToStart ? " + retorno" : ""
     }</div>
@@ -440,6 +450,11 @@ export function printDayRoutePdf(input: {
     .grid div strong {
       display: block; font-size: 8.5pt; text-transform: uppercase;
       letter-spacing: 0.04em; color: #5a6b75; font-weight: 600;
+    }
+    .pix-key {
+      margin-top: 6px; padding-top: 6px;
+      border-top: 1px dashed #c9d3d9;
+      word-break: break-all;
     }
     table { width: 100%; border-collapse: collapse; }
     td { vertical-align: top; padding: 8px 0; border-bottom: 1px solid #dde4e8; }
